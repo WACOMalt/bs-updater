@@ -11,6 +11,7 @@
         "Description": "Shows available system updates for pacman, the AUR, Flatpak, and AppImages. Click the icon to check for updates or to install them.",
         "Icon": "update-none",
         "Id": "bsums.xyz.bs-updater",
+        "License": "Unlicense",
         "Name": "bs-updater",
         "Version": "1.0.0"
     },

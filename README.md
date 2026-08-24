@@ -100,4 +100,4 @@ To change the check interval:
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+This software is in the public domain (The Unlicense). You can use it for any purpose. See [LICENSE](LICENSE).

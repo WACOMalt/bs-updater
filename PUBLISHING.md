@@ -30,10 +30,12 @@ Copy this text into the store description field:
 
 ## Screenshots
 
-- `dist/screenshot-uptodate.png`: the tray with the white circle-check icon
-- `dist/screenshot-updates.png`: the tray with the orange update icon
+- `screenshots/screenshot-uptodate.png`: the tray with the white circle-check icon
+- `screenshots/screenshot-updates.png`: the tray with the orange update icon
 
-Make new screenshots when the icons or states change.
+The other tray icons are blurred. This draws attention to the bs-updater icon
+and hides the applications of the person who makes the screenshot. Make new
+screenshots when the icons or states change, and blur them the same way.
 
 ## How to publish an update
 

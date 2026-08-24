@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <path d="M12 4a8 8 0 1 0 0 16 8 8 0 1 0 0-16zm0 1a7 7 0 1 1 0 14 7 7 0 0 1 0-14z"
+        fill="currentColor" fill-rule="evenodd" color="#232629"/>
+  <path d="M8.2 12.1l2.3 2.3 5.3-5.3" fill="none" stroke="currentColor"
+        stroke-width="1.5" color="#232629"/>
+</svg>

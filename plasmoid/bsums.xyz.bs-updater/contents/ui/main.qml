@@ -15,7 +15,9 @@ PlasmoidItem {
     property string breakdown: i18n("No check has run yet")
     property bool checking: false
 
-    readonly property string iconName: checking ? "view-refresh-symbolic" : "update-none"
+    readonly property string iconName: checking ? "view-refresh-symbolic"
+                                     : total > 0 ? "update-none"
+                                     : Qt.resolvedUrl("../icons/bs-updater-ok.svg")
     readonly property color iconColor: !checking && total > 0 ? Kirigami.Theme.neutralTextColor
                                                               : Kirigami.Theme.textColor
 

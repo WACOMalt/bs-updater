@@ -15,9 +15,9 @@ bs-updater checks and updates these sources:
 
 ## Parts
 
-- `update-all`: a command. It updates all sources in sequence.
-- `update-all -l`: shows the number of available updates for each source. It does not install them.
-- The tray widget: shows the update status in the KDE Plasma system tray. It uses `update-all` for all checks and updates.
+- `bs-update`: a command. It updates all sources in sequence.
+- `bs-update -l`: shows the number of available updates for each source. It does not install them.
+- The tray widget: shows the update status in the KDE Plasma system tray. It uses `bs-update` for all checks and updates.
 
 ## How the tray widget operates
 
@@ -26,7 +26,7 @@ bs-updater checks and updates these sources:
 - The icon is an orange circle with an arrow when updates are available. A notification also shows.
 - Click the notification to install all updates in a terminal window.
 - Click the icon to check for updates. If updates are available, a click starts the installation.
-- The widget contains a copy of the `update-all` command. The widget installs the command to `~/.local/bin` if it is not present.
+- The widget contains a copy of the `bs-update` command. The widget installs the command to `~/.local/bin` if it is not present.
 
 ## Requirements
 
@@ -67,7 +67,7 @@ bs-updater checks and updates these sources:
    2. Click the configure button.
    3. Set the "bs-updater" entry to "Shown".
 
-5. Make sure `~/.local/bin` is in your PATH. The `update-all` command is now available.
+5. Make sure `~/.local/bin` is in your PATH. The `bs-update` command is now available.
 
 ## Configuration
 
@@ -85,7 +85,7 @@ To change the check interval:
 
    ```
    kpackagetool6 -t Plasma/Applet -r bsums.xyz.bs-updater
-   rm ~/.local/bin/update-all
+   rm ~/.local/bin/bs-update
    ```
 
 ## Planned features

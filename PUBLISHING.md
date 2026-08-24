@@ -21,7 +21,7 @@ Copy this text into the store description field:
 > to date. The icon is an orange circle when updates are available. Click the
 > notification to install all updates in a terminal window.
 >
-> The widget installs the `update-all` terminal command to `~/.local/bin` on
+> The widget installs the `bs-update` terminal command to `~/.local/bin` on
 > first start. Requirements: Arch Linux, paru, pacman-contrib, Flatpak,
 > Gear Lever, and a terminal application. Support for more distributions is
 > planned.

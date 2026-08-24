@@ -2,15 +2,15 @@
 # bs-updater: update all software sources on an Arch Linux system.
 #
 # Usage:
-#   update-all                  update pacman, AUR, Flatpak, and AppImage software
-#   update-all -l, --list       show the number of available updates per source
-#   update-all -l --notify      also show a notification if updates are available
-#   update-all -l --notify-always
+#   bs-update                  update pacman, AUR, Flatpak, and AppImage software
+#   bs-update -l, --list       show the number of available updates per source
+#   bs-update -l --notify      also show a notification if updates are available
+#   bs-update -l --notify-always
 #                               also show a notification when the system is up to date
-#   update-all --in-terminal    run update-all in a new terminal window
-#   update-all -h, --help       show this help text
+#   bs-update --in-terminal    run bs-update in a new terminal window
+#   bs-update -h, --help       show this help text
 #
-# The notification is clickable. A click runs update-all in a terminal window.
+# The notification is clickable. A click runs bs-update in a terminal window.
 
 # Run Gear Lever without a display connection. Its CLI also starts the GTK
 # application, which shows a window and a tray icon. With no display, only
@@ -36,7 +36,7 @@ do_update() {
     paru -Syu && flatpak update && update_appimages
 }
 
-# Open the user's terminal application and run update-all inside it.
+# Open the user's terminal application and run bs-update inside it.
 # Order: the KDE default terminal, then $TERMINAL, then konsole.
 # Returns when the terminal window closes.
 open_in_terminal() {

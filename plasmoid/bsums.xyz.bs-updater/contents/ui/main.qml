@@ -31,8 +31,8 @@ PlasmoidItem {
     toolTipSubText: breakdown + "\n" + (total > 0 ? i18n("Click to update system")
                                                   : i18n("Click to check for updates"))
 
-    // Path of the update-all copy that ships inside this widget package.
-    readonly property string bundledScript: Qt.resolvedUrl("../code/update-all").toString().replace("file://", "")
+    // Path of the bs-update copy that ships inside this widget package.
+    readonly property string bundledScript: Qt.resolvedUrl("../code/bs-update").toString().replace("file://", "")
 
     P5Support.DataSource {
         id: exec
@@ -50,16 +50,16 @@ PlasmoidItem {
         }
     }
 
-    // Install the bundled update-all command if the user does not have it.
+    // Install the bundled bs-update command if the user does not have it.
     // This makes a widget-only installation from the KDE Store work.
     function ensureCommandInstalled() {
         exec.connectSource(
-            "BIN=\"$HOME/.local/bin/update-all\"; " +
+            "BIN=\"$HOME/.local/bin/bs-update\"; " +
             "if [ ! -x \"$BIN\" ] && [ -r '" + bundledScript + "' ]; then " +
             "mkdir -p \"$HOME/.local/bin\"; " +
             "cp '" + bundledScript + "' \"$BIN\"; chmod 755 \"$BIN\"; " +
             "notify-send -a bs-updater -i update-none 'bs-updater' " +
-            "'Installed the update-all command to ~/.local/bin'; fi")
+            "'Installed the bs-update command to ~/.local/bin'; fi")
     }
 
     Component.onCompleted: ensureCommandInstalled()
@@ -81,19 +81,19 @@ PlasmoidItem {
             root.total = newTotal
             root.breakdown = sums.join(" · ")
         } else {
-            root.breakdown = i18n("Check failed. Is update-all in ~/.local/bin?")
+            root.breakdown = i18n("Check failed. Is bs-update in ~/.local/bin?")
         }
     }
 
     function runCheck(alwaysNotify) {
         if (checking) return
         checking = true
-        exec.connectSource("$HOME/.local/bin/update-all -l "
+        exec.connectSource("$HOME/.local/bin/bs-update -l "
                            + (alwaysNotify ? "--notify-always" : "--notify"))
     }
 
     function runUpdateNow() {
-        exec.connectSource("$HOME/.local/bin/update-all --in-terminal")
+        exec.connectSource("$HOME/.local/bin/bs-update --in-terminal")
     }
 
     Timer {

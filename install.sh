@@ -17,17 +17,18 @@ if [ -n "$missing" ]; then
     exit 1
 fi
 
-echo "Installing the update-all command..."
-install -Dm755 "$REPO_DIR/bin/update-all" "$BIN_DIR/update-all"
+echo "Installing the bs-update command..."
+install -Dm755 "$REPO_DIR/bin/bs-update" "$BIN_DIR/bs-update"
 
-# Remove files from bs-updater versions before 1.1.0.
-rm -f "$BIN_DIR/update-all-check"
+# Remove files from bs-updater versions before 1.4.0.
+rm -f "$BIN_DIR/update-all-check" "$BIN_DIR/update-all"
 rm -rf "$HOME/.local/share/bs-updater"
 
 if command -v kpackagetool6 >/dev/null 2>&1; then
     echo "Installing the Plasma widget..."
-    install -Dm755 "$REPO_DIR/bin/update-all" \
-        "$REPO_DIR/plasmoid/bsums.xyz.bs-updater/contents/code/update-all"
+    rm -rf "$REPO_DIR/plasmoid/bsums.xyz.bs-updater/contents/code"
+    install -Dm755 "$REPO_DIR/bin/bs-update" \
+        "$REPO_DIR/plasmoid/bsums.xyz.bs-updater/contents/code/bs-update"
     kpackagetool6 -t Plasma/Applet -i "$REPO_DIR/plasmoid/bsums.xyz.bs-updater" 2>/dev/null \
         || kpackagetool6 -t Plasma/Applet -u "$REPO_DIR/plasmoid/bsums.xyz.bs-updater"
 else
@@ -36,7 +37,7 @@ fi
 
 case ":$PATH:" in
     *":$BIN_DIR:"*) ;;
-    *) echo "NOTE: $BIN_DIR is not in your PATH. Add it to use the update-all command." ;;
+    *) echo "NOTE: $BIN_DIR is not in your PATH. Add it to use the bs-update command." ;;
 esac
 
 echo

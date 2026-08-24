@@ -28,6 +28,17 @@ Copy this text into the store description field:
 >
 > Source: https://github.com/WACOMalt/bs-updater
 
+## Logo
+
+- `logo/logo.svg`: the source file
+- `logo/logo.png`: the 512x512 render for the store logo field
+
+Render a new PNG after a change to the SVG:
+
+```
+rsvg-convert -w 512 -h 512 logo/logo.svg -o logo/logo.png
+```
+
 ## Screenshots
 
 - `screenshots/screenshot-uptodate.png`: the tray with the white circle-check icon

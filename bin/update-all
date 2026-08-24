@@ -11,7 +11,10 @@
 #
 # The notification is clickable. A click opens Konsole and runs update-all.
 
-GEARLEVER="flatpak run it.mijorus.gearlever"
+# Run Gear Lever without a display connection. Its CLI also starts the GTK
+# application, which shows a window and a tray icon. With no display, only
+# the CLI runs.
+GEARLEVER="env -u DISPLAY -u WAYLAND_DISPLAY flatpak run it.mijorus.gearlever"
 SELF=$(readlink -f "$0" 2>/dev/null || echo "$0")
 
 usage() {

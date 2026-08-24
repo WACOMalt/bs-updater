@@ -1,0 +1,39 @@
+#!/bin/sh
+# Count pending updates across pacman repos, AUR, Flatpak, and AppImages (Gear Lever).
+# Prints one labeled line per source plus Total.
+#
+#   update-all-check                 just print counts
+#   update-all-check --notify        also notify if updates are available
+#   update-all-check --notify-always also notify when up to date
+#
+# Clicking the notification opens konsole and runs update-all.
+
+repo=$(checkupdates 2>/dev/null | grep -c .)
+aur=$(paru -Qua 2>/dev/null | grep -c .)
+fp=$(flatpak remote-ls --updates 2>/dev/null | grep -c .)
+ai=$(flatpak run it.mijorus.gearlever --list-updates 2>/dev/null \
+     | grep -v '^No updates available' | grep -c .)
+total=$((repo + aur + fp + ai))
+
+printf 'Pacman: %s\nAUR: %s\nFlatpak: %s\nAppImage: %s\nTotal: %s\n' \
+    "$repo" "$aur" "$fp" "$ai" "$total"
+
+case "$1" in
+--notify|--notify-always)
+    if [ "$total" -gt 0 ]; then
+        # Background the wait-for-click so callers get the counts immediately.
+        (
+            choice=$(notify-send -a "bs-updater" -i update-high -t 0 \
+                -A default="Update now" \
+                "$total updates available" \
+                "Pacman $repo | AUR $aur | Flatpak $fp | AppImage $ai — click to update system")
+            if [ -n "$choice" ]; then
+                konsole -e zsh -ic 'update-all; print; read -sk "?Finished. Press any key to close."'
+            fi
+        ) >/dev/null 2>&1 &
+    elif [ "$1" = "--notify-always" ]; then
+        notify-send -a "bs-updater" -i update-none -t 5000 \
+            "System is up to date" "No updates available" >/dev/null 2>&1 &
+    fi
+    ;;
+esac

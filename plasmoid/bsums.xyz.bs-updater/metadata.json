@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "ben@bsums.xyz",
+                "Name": "BSumsXYZ"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Shows available system updates for pacman, the AUR, Flatpak, and AppImages. Click the icon to check for updates or to install them.",
+        "Icon": "update-none",
+        "Id": "bsums.xyz.bs-updater",
+        "Name": "bs-updater",
+        "Version": "1.0.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-NotificationArea": true,
+    "X-Plasma-NotificationAreaCategory": "SystemServices"
+}

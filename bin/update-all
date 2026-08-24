@@ -1,0 +1,76 @@
+#!/bin/sh
+# bs-updater: update all software sources on an Arch Linux system.
+#
+# Usage:
+#   update-all                  update pacman, AUR, Flatpak, and AppImage software
+#   update-all -l, --list       show the number of available updates per source
+#   update-all -l --notify      also show a notification if updates are available
+#   update-all -l --notify-always
+#                               also show a notification when the system is up to date
+#   update-all -h, --help       show this help text
+#
+# The notification is clickable. A click opens Konsole and runs update-all.
+
+GEARLEVER="flatpak run it.mijorus.gearlever"
+SELF=$(readlink -f "$0" 2>/dev/null || echo "$0")
+
+usage() {
+    sed -n '2,12p' "$SELF" | sed 's/^# \{0,1\}//'
+}
+
+update_appimages() {
+    $GEARLEVER --list-installed | awk '{print $NF}' | grep '^/' | while read -r f; do
+        echo "-> $f"
+        # gearlever always asks y/N before updating (--force is ignored), and
+        # inside this pipeline its stdin is the exhausted file-list pipe.
+        # Feed it "y" answers on a fresh stdin instead.
+        yes | $GEARLEVER --update "$f"
+    done
+}
+
+do_update() {
+    paru -Syu && flatpak update && update_appimages
+}
+
+show_notification() {
+    if [ "$total" -gt 0 ]; then
+        # Background the wait-for-click so callers get the counts immediately.
+        (
+            choice=$(notify-send -a "bs-updater" -i update-high -t 0 \
+                -A default="Update now" \
+                "$total updates available" \
+                "Pacman $repo | AUR $aur | Flatpak $fp | AppImage $ai — click to update system")
+            if [ -n "$choice" ]; then
+                konsole -e sh -c "'$SELF'; printf '\nFinished. Press Enter to close.'; read line"
+            fi
+        ) >/dev/null 2>&1 &
+    elif [ "$1" = "--notify-always" ]; then
+        notify-send -a "bs-updater" -i update-none -t 5000 \
+            "System is up to date" "No updates available" >/dev/null 2>&1 &
+    fi
+}
+
+do_list() {
+    repo=$(checkupdates 2>/dev/null | grep -c .)
+    aur=$(paru -Qua 2>/dev/null | grep -c .)
+    fp=$(flatpak remote-ls --updates 2>/dev/null | grep -c .)
+    ai=$($GEARLEVER --list-updates 2>/dev/null \
+         | grep -v '^No updates available' | grep -c .)
+    total=$((repo + aur + fp + ai))
+
+    printf 'Pacman: %s\nAUR: %s\nFlatpak: %s\nAppImage: %s\nTotal: %s\n' \
+        "$repo" "$aur" "$fp" "$ai" "$total"
+
+    case "$1" in
+    --notify|--notify-always)
+        show_notification "$1"
+        ;;
+    esac
+}
+
+case "$1" in
+    "")        do_update ;;
+    -l|--list) do_list "$2" ;;
+    -h|--help) usage ;;
+    *)         usage; exit 1 ;;
+esac

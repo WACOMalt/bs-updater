@@ -15,10 +15,9 @@ bs-updater checks and updates these sources:
 
 ## Parts
 
-- `update-all`: a shell command. It updates all sources in sequence.
+- `update-all`: a command. It updates all sources in sequence.
 - `update-all -l`: shows the number of available updates for each source. It does not install them.
-- `update-all-check`: the check engine. The shell command and the tray widget use it.
-- The tray widget: shows the update status in the KDE Plasma system tray.
+- The tray widget: shows the update status in the KDE Plasma system tray. It uses `update-all` for all checks and updates.
 
 ## How the tray widget operates
 
@@ -32,7 +31,6 @@ bs-updater checks and updates these sources:
 
 - Arch Linux
 - KDE Plasma 6 and Konsole
-- zsh
 - paru
 - pacman-contrib (supplies `checkupdates`)
 - Flatpak
@@ -67,7 +65,7 @@ bs-updater checks and updates these sources:
    2. Click the configure button.
    3. Set the "bs-updater" entry to "Shown".
 
-5. Open a new terminal. The `update-all` command is now available.
+5. Make sure `~/.local/bin` is in your PATH. The `update-all` command is now available.
 
 ## Configuration
 
@@ -85,11 +83,8 @@ To change the check interval:
 
    ```
    kpackagetool6 -t Plasma/Applet -r bsums.xyz.bs-updater
-   rm ~/.local/bin/update-all-check
-   rm -r ~/.local/share/bs-updater
+   rm ~/.local/bin/update-all
    ```
-
-3. Remove the bs-updater lines from `~/.zshrc`.
 
 ## Planned features
 

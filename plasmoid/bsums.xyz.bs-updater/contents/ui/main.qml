@@ -57,19 +57,19 @@ PlasmoidItem {
             root.total = newTotal
             root.breakdown = sums.join(" · ")
         } else {
-            root.breakdown = i18n("Check failed — is update-all-check in ~/.local/bin?")
+            root.breakdown = i18n("Check failed. Is update-all in ~/.local/bin?")
         }
     }
 
     function runCheck(alwaysNotify) {
         if (checking) return
         checking = true
-        exec.connectSource("$HOME/.local/bin/update-all-check "
+        exec.connectSource("$HOME/.local/bin/update-all -l "
                            + (alwaysNotify ? "--notify-always" : "--notify"))
     }
 
     function runUpdateNow() {
-        exec.connectSource("konsole -e zsh -ic 'update-all; print; read -sk \"?Finished. Press any key to close.\"'")
+        exec.connectSource("konsole -e sh -c \"$HOME/.local/bin/update-all; printf '\\nFinished. Press Enter to close.'; read line\"")
     }
 
     Timer {

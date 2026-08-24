@@ -22,8 +22,8 @@ bs-updater checks and updates these sources:
 ## How the tray widget operates
 
 - The widget checks for updates one time each hour. You can configure this interval.
-- The icon is white when the system is up to date.
-- The icon becomes orange when updates are available. A notification also shows.
+- The icon is a white circle with a check mark when the system is up to date.
+- The icon is an orange circle with an arrow when updates are available. A notification also shows.
 - Click the notification to install all updates in a Konsole window.
 - Click the icon to check for updates. If updates are available, a click starts the installation.
 

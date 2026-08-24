@@ -7,7 +7,7 @@ REPO_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 BIN_DIR="$HOME/.local/bin"
 
 missing=""
-for cmd in paru checkupdates flatpak notify-send konsole; do
+for cmd in paru checkupdates flatpak notify-send; do
     command -v "$cmd" >/dev/null 2>&1 || missing="$missing $cmd"
 done
 flatpak info it.mijorus.gearlever >/dev/null 2>&1 || missing="$missing gearlever(flatpak)"

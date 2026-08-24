@@ -24,14 +24,15 @@ bs-updater checks and updates these sources:
 - The widget checks for updates one time each hour. You can configure this interval.
 - The icon is a white circle with a check mark when the system is up to date.
 - The icon is an orange circle with an arrow when updates are available. A notification also shows.
-- Click the notification to install all updates in a Konsole window.
+- Click the notification to install all updates in a terminal window.
 - Click the icon to check for updates. If updates are available, a click starts the installation.
 - The widget contains a copy of the `update-all` command. The widget installs the command to `~/.local/bin` if it is not present.
 
 ## Requirements
 
 - Arch Linux
-- KDE Plasma 6 and Konsole
+- KDE Plasma 6
+- A terminal application. bs-updater uses the KDE default terminal. If none is set, it uses Konsole.
 - paru
 - pacman-contrib (supplies `checkupdates`)
 - Flatpak

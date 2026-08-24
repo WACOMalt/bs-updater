@@ -43,7 +43,7 @@ PlasmoidItem {
             if (sourceName.indexOf(" -l ") !== -1) {
                 root.checking = false
                 root.parseOutput(data.stdout || "")
-            } else if (sourceName.indexOf("konsole") === 0) {
+            } else if (sourceName.indexOf("--in-terminal") !== -1) {
                 // An update run finished. Refresh the icon state.
                 root.runCheck(false)
             }
@@ -93,7 +93,7 @@ PlasmoidItem {
     }
 
     function runUpdateNow() {
-        exec.connectSource("konsole -e sh -c \"$HOME/.local/bin/update-all; printf '\\nFinished. Press Enter to close.'; read line\"")
+        exec.connectSource("$HOME/.local/bin/update-all --in-terminal")
     }
 
     Timer {

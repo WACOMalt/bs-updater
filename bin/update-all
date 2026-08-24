@@ -7,9 +7,10 @@
 #   update-all -l --notify      also show a notification if updates are available
 #   update-all -l --notify-always
 #                               also show a notification when the system is up to date
+#   update-all --in-terminal    run update-all in a new terminal window
 #   update-all -h, --help       show this help text
 #
-# The notification is clickable. A click opens Konsole and runs update-all.
+# The notification is clickable. A click runs update-all in a terminal window.
 
 # Run Gear Lever without a display connection. Its CLI also starts the GTK
 # application, which shows a window and a tray icon. With no display, only
@@ -18,7 +19,7 @@ GEARLEVER="env -u DISPLAY -u WAYLAND_DISPLAY flatpak run it.mijorus.gearlever"
 SELF=$(readlink -f "$0" 2>/dev/null || echo "$0")
 
 usage() {
-    sed -n '2,12p' "$SELF" | sed 's/^# \{0,1\}//'
+    sed -n '2,13p' "$SELF" | sed 's/^# \{0,1\}//'
 }
 
 update_appimages() {
@@ -35,6 +36,16 @@ do_update() {
     paru -Syu && flatpak update && update_appimages
 }
 
+# Open the user's terminal application and run update-all inside it.
+# Order: the KDE default terminal, then $TERMINAL, then konsole.
+# Returns when the terminal window closes.
+open_in_terminal() {
+    term=$(kreadconfig6 --file kdeglobals --group General --key TerminalApplication 2>/dev/null)
+    [ -n "$term" ] || term="${TERMINAL:-}"
+    [ -n "$term" ] || term=konsole
+    $term -e sh -c "'$SELF'; printf '\nFinished. Press Enter to close.'; read line"
+}
+
 show_notification() {
     if [ "$total" -gt 0 ]; then
         # Background the wait-for-click so callers get the counts immediately.
@@ -44,7 +55,7 @@ show_notification() {
                 "$total updates available" \
                 "Pacman $repo | AUR $aur | Flatpak $fp | AppImage $ai — click to update system")
             if [ -n "$choice" ]; then
-                konsole -e sh -c "'$SELF'; printf '\nFinished. Press Enter to close.'; read line"
+                open_in_terminal
             fi
         ) >/dev/null 2>&1 &
     elif [ "$1" = "--notify-always" ]; then
@@ -72,8 +83,9 @@ do_list() {
 }
 
 case "$1" in
-    "")        do_update ;;
-    -l|--list) do_list "$2" ;;
-    -h|--help) usage ;;
-    *)         usage; exit 1 ;;
+    "")            do_update ;;
+    -l|--list)     do_list "$2" ;;
+    --in-terminal) open_in_terminal ;;
+    -h|--help)     usage ;;
+    *)             usage; exit 1 ;;
 esac

@@ -1,6 +1,7 @@
 # bs-updater
 
 bs-updater updates all software on an Arch Linux system with one command.
+Future updates will support more Linux distributions.
 A tray widget for KDE Plasma tells you when updates are available.
 
 ## Update sources

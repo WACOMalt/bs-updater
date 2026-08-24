@@ -26,6 +26,7 @@ bs-updater checks and updates these sources:
 - The icon is an orange circle with an arrow when updates are available. A notification also shows.
 - Click the notification to install all updates in a Konsole window.
 - Click the icon to check for updates. If updates are available, a click starts the installation.
+- The widget contains a copy of the `update-all` command. The widget installs the command to `~/.local/bin` if it is not present.
 
 ## Requirements
 

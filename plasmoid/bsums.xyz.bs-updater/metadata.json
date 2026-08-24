@@ -13,7 +13,7 @@
         "Id": "bsums.xyz.bs-updater",
         "License": "Unlicense",
         "Name": "bs-updater",
-        "Version": "1.1.1"
+        "Version": "1.2.0"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
     "X-Plasma-NotificationArea": true,

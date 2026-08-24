@@ -31,16 +31,38 @@ PlasmoidItem {
     toolTipSubText: breakdown + "\n" + (total > 0 ? i18n("Click to update system")
                                                   : i18n("Click to check for updates"))
 
+    // Path of the update-all copy that ships inside this widget package.
+    readonly property string bundledScript: Qt.resolvedUrl("../code/update-all").toString().replace("file://", "")
+
     P5Support.DataSource {
         id: exec
         engine: "executable"
         connectedSources: []
         onNewData: (sourceName, data) => {
             disconnectSource(sourceName)
-            root.checking = false
-            root.parseOutput(data.stdout || "")
+            if (sourceName.indexOf(" -l ") !== -1) {
+                root.checking = false
+                root.parseOutput(data.stdout || "")
+            } else if (sourceName.indexOf("konsole") === 0) {
+                // An update run finished. Refresh the icon state.
+                root.runCheck(false)
+            }
         }
     }
+
+    // Install the bundled update-all command if the user does not have it.
+    // This makes a widget-only installation from the KDE Store work.
+    function ensureCommandInstalled() {
+        exec.connectSource(
+            "BIN=\"$HOME/.local/bin/update-all\"; " +
+            "if [ ! -x \"$BIN\" ] && [ -r '" + bundledScript + "' ]; then " +
+            "mkdir -p \"$HOME/.local/bin\"; " +
+            "cp '" + bundledScript + "' \"$BIN\"; chmod 755 \"$BIN\"; " +
+            "notify-send -a bs-updater -i update-none 'bs-updater' " +
+            "'Installed the update-all command to ~/.local/bin'; fi")
+    }
+
+    Component.onCompleted: ensureCommandInstalled()
 
     function parseOutput(out) {
         const lines = out.trim().split("\n")

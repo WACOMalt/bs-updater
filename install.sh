@@ -26,6 +26,8 @@ rm -rf "$HOME/.local/share/bs-updater"
 
 if command -v kpackagetool6 >/dev/null 2>&1; then
     echo "Installing the Plasma widget..."
+    install -Dm755 "$REPO_DIR/bin/update-all" \
+        "$REPO_DIR/plasmoid/bsums.xyz.bs-updater/contents/code/update-all"
     kpackagetool6 -t Plasma/Applet -i "$REPO_DIR/plasmoid/bsums.xyz.bs-updater" 2>/dev/null \
         || kpackagetool6 -t Plasma/Applet -u "$REPO_DIR/plasmoid/bsums.xyz.bs-updater"
 else

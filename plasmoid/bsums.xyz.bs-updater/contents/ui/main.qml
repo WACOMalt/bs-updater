@@ -22,7 +22,11 @@ PlasmoidItem {
                                                               : Kirigami.Theme.textColor
 
     Plasmoid.icon: iconName
-    Plasmoid.status: PlasmaCore.Types.ActiveStatus
+    // Active when updates are available, passive when not. With the tray
+    // entry set to "Shown when relevant", the icon then hides while the
+    // system is up to date. "Always shown" shows it in both states.
+    Plasmoid.status: total > 0 ? PlasmaCore.Types.ActiveStatus
+                               : PlasmaCore.Types.PassiveStatus
 
     toolTipMainText: checking ? i18n("Checking for updates…")
                    : total < 0 ? i18n("Update Checker")

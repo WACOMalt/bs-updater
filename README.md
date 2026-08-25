@@ -27,6 +27,7 @@ bs-updater checks and updates these sources:
 - Click the notification to install all updates in a terminal window.
 - Click the icon to check for updates. If updates are available, a click starts the installation.
 - The widget contains a copy of the `bs-update` command. The widget installs the command to `~/.local/bin` if it is not present.
+- The widget supports the tray visibility modes. With "Shown when relevant", the icon hides when the system is up to date. It shows again when updates are available. Set the entry to "Always shown" to always see the icon.
 
 ## Requirements
 

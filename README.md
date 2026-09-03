@@ -73,12 +73,17 @@ bs-updater checks and updates these sources:
 
 ## Configuration
 
-To change the check interval:
+To open the settings:
 
 1. Click the arrow in the system tray.
 2. Right-click the bs-updater icon.
 3. Click "Configure bs-updater".
-4. Set the interval in hours.
+
+The settings are:
+
+- The check interval, in hours.
+- Show a notification when updates are available. Default: on.
+- Show a notification when a manual check finds no updates. Default: on.
 
 ## Uninstall
 

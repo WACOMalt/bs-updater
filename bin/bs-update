@@ -7,6 +7,8 @@
 #   bs-update -l --notify      also show a notification if updates are available
 #   bs-update -l --notify-always
 #                               also show a notification when the system is up to date
+#   bs-update -l --notify-uptodate
+#                               only show the up-to-date notification
 #   bs-update --in-terminal    run bs-update in a new terminal window
 #   bs-update -h, --help       show this help text
 #
@@ -19,7 +21,7 @@ GEARLEVER="env -u DISPLAY -u WAYLAND_DISPLAY flatpak run it.mijorus.gearlever"
 SELF=$(readlink -f "$0" 2>/dev/null || echo "$0")
 
 usage() {
-    sed -n '2,13p' "$SELF" | sed 's/^# \{0,1\}//'
+    sed -n '2,15p' "$SELF" | sed 's/^# \{0,1\}//'
 }
 
 update_appimages() {
@@ -57,6 +59,7 @@ open_in_terminal() {
 
 show_notification() {
     if [ "$total" -gt 0 ]; then
+        case "$1" in --notify-uptodate) return ;; esac
         # Background the wait-for-click so callers get the counts immediately.
         (
             choice=$(notify-send -a "bs-updater" -i update-high -t 0 \
@@ -67,9 +70,13 @@ show_notification() {
                 open_in_terminal
             fi
         ) >/dev/null 2>&1 &
-    elif [ "$1" = "--notify-always" ]; then
-        notify-send -a "bs-updater" -i update-none -t 5000 \
-            "System is up to date" "No updates available" >/dev/null 2>&1 &
+    else
+        case "$1" in
+        --notify-always|--notify-uptodate)
+            notify-send -a "bs-updater" -i update-none -t 5000 \
+                "System is up to date" "No updates available" >/dev/null 2>&1 &
+            ;;
+        esac
     fi
 }
 
@@ -85,7 +92,7 @@ do_list() {
         "$repo" "$aur" "$fp" "$ai" "$total"
 
     case "$1" in
-    --notify|--notify-always)
+    --notify|--notify-always|--notify-uptodate)
         show_notification "$1"
         ;;
     esac

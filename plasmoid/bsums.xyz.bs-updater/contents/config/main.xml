@@ -9,5 +9,13 @@
             <label>How often to check for updates, in hours</label>
             <default>6</default>
         </entry>
+        <entry name="notifyUpdates" type="Bool">
+            <label>Show a notification when updates are available</label>
+            <default>true</default>
+        </entry>
+        <entry name="notifyUpToDate" type="Bool">
+            <label>Show a notification when a manual check finds no updates</label>
+            <default>true</default>
+        </entry>
     </group>
 </kcfg>

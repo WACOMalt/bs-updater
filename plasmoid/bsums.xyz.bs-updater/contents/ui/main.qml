@@ -105,11 +105,18 @@ PlasmoidItem {
         }
     }
 
-    function runCheck(alwaysNotify) {
+    // manual: the user started this check. Scheduled checks only notify
+    // about available updates; manual checks can also confirm up-to-date.
+    function runCheck(manual) {
         if (checking) return
         checking = true
-        exec.connectSource("$HOME/.local/bin/bs-update -l "
-                           + (alwaysNotify ? "--notify-always" : "--notify"))
+        const notifyUpdates = Plasmoid.configuration.notifyUpdates
+        const notifyClean = manual && Plasmoid.configuration.notifyUpToDate
+        let flag = ""
+        if (notifyUpdates && notifyClean) flag = "--notify-always"
+        else if (notifyUpdates) flag = "--notify"
+        else if (notifyClean) flag = "--notify-uptodate"
+        exec.connectSource("$HOME/.local/bin/bs-update -l " + flag)
     }
 
     function runUpdateNow() {

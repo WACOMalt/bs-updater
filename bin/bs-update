@@ -24,14 +24,10 @@ usage() {
     sed -n '2,15p' "$SELF" | sed 's/^# \{0,1\}//'
 }
 
+# --all checks each integrated AppImage and downloads only those with a
+# newer version available. --yes skips the interactive question.
 update_appimages() {
-    $GEARLEVER --list-installed | awk '{print $NF}' | grep '^/' | while read -r f; do
-        echo "-> $f"
-        # gearlever always asks y/N before updating (--force is ignored), and
-        # inside this pipeline its stdin is the exhausted file-list pipe.
-        # Feed it "y" answers on a fresh stdin instead.
-        yes | $GEARLEVER --update "$f"
-    done
+    $GEARLEVER --update --all --yes
 }
 
 # The widget watches this file. A new timestamp tells the widget that an

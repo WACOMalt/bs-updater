@@ -38,18 +38,31 @@ PlasmoidItem {
     // Path of the bs-update copy that ships inside this widget package.
     readonly property string bundledScript: Qt.resolvedUrl("../code/bs-update").toString().replace("file://", "")
 
+    // One long-running shell process that exits when bs-update writes a new
+    // timestamp to its state file after a completed update run. The widget
+    // then changes to the up-to-date state at once, from any update origin:
+    // the widget, the notification, or a manual terminal run.
+    readonly property string updateWatcher:
+        'F="${XDG_CACHE_HOME:-$HOME/.cache}/bs-updater/last-update"; ' +
+        'T0=$(stat -c %Y "$F" 2>/dev/null || echo 0); ' +
+        'while :; do sleep 3; T=$(stat -c %Y "$F" 2>/dev/null || echo 0); ' +
+        '[ "$T" != "$T0" ] && exit 0; done'
+
     P5Support.DataSource {
         id: exec
         engine: "executable"
         connectedSources: []
         onNewData: (sourceName, data) => {
             disconnectSource(sourceName)
-            if (sourceName.indexOf(" -l ") !== -1) {
+            if (sourceName === root.updateWatcher) {
+                // An update run finished. Show the up-to-date state at
+                // once, verify in the background, and watch again.
+                root.total = 0
+                root.runCheck(false)
+                exec.connectSource(root.updateWatcher)
+            } else if (sourceName.indexOf(" -l ") !== -1) {
                 root.checking = false
                 root.parseOutput(data.stdout || "")
-            } else if (sourceName.indexOf("--in-terminal") !== -1) {
-                // An update run finished. Refresh the icon state.
-                root.runCheck(false)
             }
         }
     }
@@ -66,7 +79,10 @@ PlasmoidItem {
             "'Installed the bs-update command to ~/.local/bin'; fi")
     }
 
-    Component.onCompleted: ensureCommandInstalled()
+    Component.onCompleted: {
+        ensureCommandInstalled()
+        exec.connectSource(updateWatcher)
+    }
 
     function parseOutput(out) {
         const lines = out.trim().split("\n")
@@ -101,7 +117,7 @@ PlasmoidItem {
     }
 
     Timer {
-        interval: Math.max(5, Plasmoid.configuration.checkIntervalMinutes) * 60 * 1000
+        interval: Math.max(1, Plasmoid.configuration.checkIntervalHours) * 60 * 60 * 1000
         running: true
         repeat: true
         onTriggered: root.runCheck(false)

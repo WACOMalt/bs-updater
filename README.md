@@ -21,7 +21,8 @@ bs-updater checks and updates these sources:
 
 ## How the tray widget operates
 
-- The widget checks for updates one time each hour. You can configure this interval.
+- The widget checks for updates one time every 6 hours. You can configure this interval in steps of 1 hour.
+- When an update run completes, the widget changes to the up-to-date state at once.
 - The icon is a white circle with a check mark when the system is up to date.
 - The icon is an orange circle with an arrow when updates are available. A notification also shows.
 - Click the notification to install all updates in a terminal window.
@@ -77,7 +78,7 @@ To change the check interval:
 1. Click the arrow in the system tray.
 2. Right-click the bs-updater icon.
 3. Click "Configure bs-updater".
-4. Set the interval in minutes.
+4. Set the interval in hours.
 
 ## Uninstall
 

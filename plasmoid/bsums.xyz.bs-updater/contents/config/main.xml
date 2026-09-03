@@ -5,9 +5,9 @@
       http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
     <kcfgfile name=""/>
     <group name="General">
-        <entry name="checkIntervalMinutes" type="Int">
-            <label>How often to check for updates, in minutes</label>
-            <default>60</default>
+        <entry name="checkIntervalHours" type="Int">
+            <label>How often to check for updates, in hours</label>
+            <default>6</default>
         </entry>
     </group>
 </kcfg>

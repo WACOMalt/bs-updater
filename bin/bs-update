@@ -32,8 +32,17 @@ update_appimages() {
     done
 }
 
+# The widget watches this file. A new timestamp tells the widget that an
+# update run finished, so it changes to the up-to-date state at once.
+STATE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bs-updater"
+
+mark_updated() {
+    mkdir -p "$STATE_DIR"
+    date +%s > "$STATE_DIR/last-update"
+}
+
 do_update() {
-    paru -Syu && flatpak update && update_appimages
+    paru -Syu && flatpak update && update_appimages && mark_updated
 }
 
 # Open the user's terminal application and run bs-update inside it.

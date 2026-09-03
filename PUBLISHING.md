@@ -17,7 +17,7 @@ Copy this text into the store description field:
 > bs-updater shows the update status for an Arch Linux system in the system tray.
 >
 > The widget checks pacman, the AUR, Flatpak, and Gear Lever AppImages one time
-> each hour. The icon is a white circle with a check mark when the system is up
+> every 6 hours. The icon is a white circle with a check mark when the system is up
 > to date. The icon is an orange circle when updates are available. Click the
 > notification to install all updates in a terminal window.
 >

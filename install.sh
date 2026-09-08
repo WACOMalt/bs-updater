@@ -1,5 +1,6 @@
 #!/bin/sh
-# bs-updater installation script for Arch Linux, Fedora and Nobara.
+# bs-updater installation script for Arch Linux, Fedora, Nobara, Debian
+# and Ubuntu.
 # Installs to user directories only. Does not use sudo.
 set -e
 
@@ -29,6 +30,9 @@ fi
 if command -v rpm >/dev/null 2>&1; then
     command -v dnf >/dev/null 2>&1 || absent="$absent dnf(RPM packages)"
 fi
+if command -v dpkg >/dev/null 2>&1; then
+    command -v apt-get >/dev/null 2>&1 || absent="$absent apt(Debian packages)"
+fi
 command -v flatpak >/dev/null 2>&1 || absent="$absent flatpak(Flatpak applications)"
 flatpak info it.mijorus.gearlever >/dev/null 2>&1 || absent="$absent gearlever(AppImages)"
 if [ -n "$absent" ]; then
@@ -46,6 +50,10 @@ if command -v nobara-sync >/dev/null 2>&1; then
 elif command -v dnf >/dev/null 2>&1 && ! command -v pacman >/dev/null 2>&1; then
     echo "This looks like Fedora. Check \"dnf\" in the widget settings, under"
     echo "\"Update sources\", and uncheck the Arch sources."
+    echo
+elif command -v apt-get >/dev/null 2>&1 && ! command -v pacman >/dev/null 2>&1; then
+    echo "This looks like Debian or Ubuntu. Check \"apt\" in the widget settings,"
+    echo "under \"Update sources\", and uncheck the Arch sources."
     echo
 fi
 

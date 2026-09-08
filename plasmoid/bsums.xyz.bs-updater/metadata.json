@@ -8,12 +8,12 @@
             }
         ],
         "Category": "System Information",
-        "Description": "Shows available system updates for pacman, the AUR, dnf, nobara-sync, Flatpak, and AppImages. Choose the update sources in the settings. Click the icon to check for updates or to install them.",
+        "Description": "Shows available system updates for pacman, the AUR, dnf, nobara-sync, apt, Flatpak, and AppImages. Choose the update sources in the settings. Click the icon to check for updates or to install them.",
         "Icon": "update-none",
         "Id": "bsums.xyz.bs-updater",
         "License": "Unlicense",
         "Name": "bs-updater",
-        "Version": "1.9.0"
+        "Version": "1.10.0"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
     "X-Plasma-NotificationArea": true,

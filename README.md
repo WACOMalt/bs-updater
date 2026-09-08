@@ -1,7 +1,7 @@
 # bs-updater
 
-bs-updater updates all software on an Arch Linux, Fedora or Nobara system
-with one command.
+bs-updater updates all software on an Arch Linux, Fedora, Nobara, Debian or
+Ubuntu system with one command.
 A tray widget for KDE Plasma tells you when updates are available.
 
 ## Update sources
@@ -16,6 +16,7 @@ in the widget settings.
 | AUR packages | `paru` | Arch | yes |
 | RPM packages | `dnf` | Fedora | no |
 | RPM packages and Nobara fixups | `nobara-sync` | Nobara | no |
+| Debian packages | `apt` | Debian, Ubuntu | no |
 | Flatpak applications and runtimes | `flatpak` | any | yes |
 | AppImages integrated with Gear Lever | `Gear Lever` | any | yes |
 
@@ -23,7 +24,9 @@ paru is listed twice because it updates two kinds of package, and you can use
 it for one of them without the other.
 
 The defaults suit Arch. On Fedora check `dnf`, on Nobara check `nobara-sync`,
-and uncheck the Arch sources. See [Fedora and Nobara](#fedora-and-nobara).
+on Debian or Ubuntu check `apt`, and uncheck the Arch sources. See
+[Fedora and Nobara](#fedora-and-nobara) and
+[Debian and Ubuntu](#debian-and-ubuntu).
 
 Two tools for the same kind of package would install the same updates twice
 and count them twice. bs-updater checks the selection for that: the settings
@@ -31,8 +34,9 @@ show a warning, and `bs-update` uses only the first of the two and says so.
 This is why `pacman` is off by default, since `paru` already covers repository
 packages, and why only one of `dnf` and `nobara-sync` may be checked.
 
-Arch repository packages and RPM packages are separate kinds of package, so
-`pacman` and `dnf` do not clash. A system has one or the other.
+Arch repository packages, RPM packages and Debian packages are separate kinds
+of package, so `pacman`, `dnf` and `apt` do not clash. A system has one of
+them.
 
 ## Fedora and Nobara
 
@@ -48,6 +52,28 @@ root password on every scheduled check.
 
 `nobara-sync cli` leaves Flatpaks alone unless it is given `--all`, so keep
 the `flatpak` source checked to have them updated and counted.
+
+## Debian and Ubuntu
+
+On Debian or Ubuntu, check `apt` under "Update sources" and uncheck the Arch
+sources. This covers every distribution that uses APT, such as Linux Mint and
+Pop!_OS.
+
+`bs-update` counts the available updates with `apt-get -s upgrade`, which
+simulates the upgrade and needs no root, and installs them with
+`sudo apt-get update && sudo apt-get upgrade`.
+
+Two details follow from this:
+
+- The count comes from the package lists on disk, because refreshing them
+  needs root and a scheduled check has no password to give. Debian and Ubuntu
+  refresh those lists in the background with the `apt-daily` timer, so the
+  count is as recent as the last refresh. The update run refreshes them
+  itself before it installs anything.
+- `apt-get upgrade` never removes a package. A package whose update would
+  need a removal is kept back and left to you, and it is not counted either,
+  so the number you see is the number that gets installed. Run
+  `sudo apt-get dist-upgrade` yourself for the kept back packages.
 
 ## Parts
 
@@ -71,7 +97,7 @@ the `flatpak` source checked to have them updated and counted.
 
 ## Requirements
 
-- Arch Linux, Fedora, or Nobara
+- Arch Linux, Fedora, Nobara, Debian, or Ubuntu
 - KDE Plasma 6
 - A terminal application. bs-updater uses the KDE default terminal. If none is set, it uses Konsole.
 - libnotify (supplies `notify-send`)
@@ -84,6 +110,7 @@ you enable:
 - dnf, for RPM packages (Fedora). dnf 4 and dnf 5 both work
 - nobara-sync, for RPM packages and the Nobara fixups (Nobara; part of the
   distribution)
+- apt, for Debian packages (Debian, Ubuntu; part of the distribution)
 - Flatpak, for Flatpak applications and runtimes
 - Gear Lever (Flatpak: `it.mijorus.gearlever`), for AppImages
 
@@ -145,6 +172,7 @@ paru-repo=on
 paru-aur=on
 dnf=off
 nobara-sync=off
+apt=off
 flatpak=on
 gearlever=on
 ```
@@ -165,8 +193,8 @@ Without the file, the Arch tools except `pacman` are enabled, along with
 ## Tests
 
 `tests/run-tests.sh` tests the `bs-update` command. It replaces pacman, paru,
-dnf, nobara-sync, Flatpak, and the other commands with stubs, so it installs
-nothing and runs on any machine:
+dnf, nobara-sync, apt, Flatpak, and the other commands with stubs, so it
+installs nothing and runs on any machine:
 
 ```
 ./tests/run-tests.sh
@@ -174,7 +202,6 @@ nothing and runs on any machine:
 
 ## Planned features
 
-- Support for Debian and Ubuntu (APT)
 - Support for yay as an alternative AUR helper
 - Automatic detection of the installed package managers, to preselect the update sources
 - Installation instructions for more distributions

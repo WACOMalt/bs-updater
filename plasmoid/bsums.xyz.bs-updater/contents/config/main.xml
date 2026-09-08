@@ -45,6 +45,12 @@
             <label>Update RPM packages and Nobara fixups with nobara-sync</label>
             <default>false</default>
         </entry>
+        <!-- The Debian tool is off by default for the same reason: a
+             Debian or Ubuntu user turns it on here and the others off. -->
+        <entry name="toolApt" type="Bool">
+            <label>Update Debian packages with apt</label>
+            <default>false</default>
+        </entry>
         <entry name="toolFlatpak" type="Bool">
             <label>Update Flatpak applications and runtimes</label>
             <default>true</default>

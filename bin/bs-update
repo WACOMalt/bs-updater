@@ -16,11 +16,11 @@
 #   bs-update -h, --help       show this help text
 #
 # The supported tools are pacman, paru-repo, paru-aur, dnf, nobara-sync,
-# flatpak, and gearlever. The tray widget writes the enabled ones to
+# apt, flatpak, and gearlever. The tray widget writes the enabled ones to
 # ~/.config/bs-updater/tools.conf. Without that file the Arch tools except
 # pacman are enabled, because paru already updates repository packages.
-# On Fedora enable dnf, and on Nobara enable nobara-sync, in the widget
-# settings or in that file.
+# On Fedora enable dnf, on Nobara enable nobara-sync, and on Debian or
+# Ubuntu enable apt, in the widget settings or in that file.
 #
 # The notification is clickable. A click runs bs-update in a terminal window.
 
@@ -43,23 +43,26 @@ paru-repo|repo|paru (repository packages)
 paru-aur|aur|paru (AUR packages)
 dnf|rpm|DNF
 nobara-sync|rpm|nobara-sync
+apt|deb|APT
 flatpak|flatpak|Flatpak
 gearlever|appimage|Gear Lever'
 
 # The kinds of package a tool can cover. One line each:
 #   id|heading used in the list output|name shown to the user
-# Arch repository packages and RPM packages are separate domains: a system
-# has one or the other, and a tool for one says nothing about the other.
+# Arch repository packages, RPM packages and Debian packages are separate
+# domains: a system has one of them, and a tool for one says nothing about
+# the others.
 DOMAINS='repo|Pacman|repository packages
 aur|AUR|AUR packages
 rpm|RPM|RPM packages
+deb|APT|Debian packages
 flatpak|Flatpak|Flatpak applications and runtimes
 appimage|AppImage|AppImages'
 
 # Used when the configuration file does not exist. paru covers repository
 # packages, so plain pacman stays off and the two do not conflict. The RPM
-# tools stay off as well: this default is for Arch, and Fedora and Nobara
-# users pick their tool in the widget settings.
+# and Debian tools stay off as well: this default is for Arch, and Fedora,
+# Nobara, Debian and Ubuntu users pick their tool in the widget settings.
 DEFAULT_TOOLS='paru-repo paru-aur flatpak gearlever'
 
 warn() {
@@ -157,6 +160,22 @@ count_rpm() {
         END { print n + 0 }'
 }
 
+# The number of Debian packages with an update available. "apt-get -s
+# upgrade" simulates the upgrade and prints one "Inst name ..." line per
+# package it would install, which is exactly what the apt tool installs
+# below. It needs no root, unlike "apt-get update", so a scheduled check
+# from the tray widget can run it. apt-get has a stable command line
+# interface; the apt command warns that its own is not meant for scripts.
+#
+# The count comes from the package lists on disk. Debian and Ubuntu
+# refresh those in the background with the apt-daily timer, so a system
+# with that timer running counts what its last refresh found.
+count_deb() {
+    apt-get -q -s upgrade 2>/dev/null | awk '
+        /^Inst / { n++ }
+        END { print n + 0 }'
+}
+
 # The number of updates one tool has available.
 count_tool() {
     case "$1" in
@@ -166,6 +185,7 @@ count_tool() {
     # Its own check-updates command would ask for the root password, which
     # a scheduled check from the tray widget cannot answer.
     dnf|nobara-sync)  count_rpm ;;
+    apt)              count_deb ;;
     flatpak)          flatpak remote-ls --updates 2>/dev/null | grep -c . ;;
     # --all checks each integrated AppImage and downloads only those with
     # a newer version available. --yes skips the interactive question.
@@ -186,6 +206,12 @@ update_tool() {
     # Nobara fixups; it leaves Flatpaks alone unless given --all, so the
     # flatpak tool stays in charge of those.
     nobara-sync) nobara-sync cli ;;
+    # "apt-get update" refreshes the package lists, which apt-get upgrade
+    # needs to see anything new; unlike pacman -Syu and dnf upgrade it does
+    # not do that itself. "upgrade" never removes a package, so a package
+    # whose update needs one is kept back and left for the user; count_deb
+    # leaves it out of the count for the same reason.
+    apt)       sudo apt-get update && sudo apt-get upgrade ;;
     flatpak)   flatpak update ;;
     gearlever) $GEARLEVER --update --all --yes ;;
     esac

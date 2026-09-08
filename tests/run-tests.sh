@@ -84,6 +84,48 @@ cat > "$STUB_BIN/nobara-sync" <<'EOF'
 echo "nobara-sync $*" >> "$STUB_LOG"
 EOF
 
+# "apt-get -s upgrade" simulates the upgrade and prints one "Inst" line per
+# package it would install. STUB_APT_TRICKY makes it print the awkward
+# parts of a real simulation as well: the note about the simulation, the
+# progress lines, the indented list of package names, the "kept back"
+# section for packages this upgrade leaves alone, the summary line, and a
+# "Conf" line after every "Inst" line.
+cat > "$STUB_BIN/apt-get" <<'EOF'
+#!/bin/sh
+echo "apt-get $*" >> "$STUB_LOG"
+case "$*" in
+*-s*upgrade*)
+    if [ "${STUB_APT_TRICKY:-0}" -eq 1 ]; then
+        cat <<'REPORT'
+NOTE: This is only a simulation!
+      apt-get needs root privileges for real execution.
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Calculating upgrade...
+The following packages have been kept back:
+  linux-image-generic
+The following packages will be upgraded:
+  bash libc6
+2 upgraded, 0 newly installed, 0 to remove and 1 not upgraded.
+Inst bash [5.2.15-2] (5.2.15-3 Debian:12 [amd64])
+Conf bash (5.2.15-3 Debian:12 [amd64])
+Inst libc6 [2.36-9] (2.36-9+deb12u1 Debian:12 [amd64])
+Conf libc6 (2.36-9+deb12u1 Debian:12 [amd64])
+REPORT
+        exit 0
+    fi
+    i=1
+    while [ "$i" -le "${STUB_DEB_COUNT:-0}" ]; do
+        echo "Inst package-$i [1.0-$i] (2.0-$i Debian:12 [amd64])"
+        echo "Conf package-$i (2.0-$i Debian:12 [amd64])"
+        i=$((i + 1))
+    done
+    ;;
+esac
+exit "${STUB_APT_RC:-0}"
+EOF
+
 cat > "$STUB_BIN/sudo" <<'EOF'
 #!/bin/sh
 echo "sudo $*" >> "$STUB_LOG"
@@ -188,9 +230,10 @@ clear_config() {
 STUB_REPO_COUNT=3
 STUB_AUR_COUNT=2
 STUB_RPM_COUNT=5
+STUB_DEB_COUNT=6
 STUB_FLATPAK_COUNT=4
 STUB_APPIMAGE_COUNT=1
-export STUB_REPO_COUNT STUB_AUR_COUNT STUB_RPM_COUNT
+export STUB_REPO_COUNT STUB_AUR_COUNT STUB_RPM_COUNT STUB_DEB_COUNT
 export STUB_FLATPAK_COUNT STUB_APPIMAGE_COUNT
 
 echo "# Defaults, without a configuration file"
@@ -305,6 +348,7 @@ paru-repo=on
 paru-aur=on
 dnf=off
 nobara-sync=off
+apt=off
 flatpak=on
 gearlever=on
 EOF
@@ -315,6 +359,7 @@ paru-repo    on  paru (repository packages): repository packages
 paru-aur     on  paru (AUR packages): AUR packages
 dnf          off DNF: RPM packages
 nobara-sync  off nobara-sync: RPM packages
+apt          off APT: Debian packages
 flatpak      on  Flatpak: Flatpak applications and runtimes
 gearlever    on  Gear Lever: AppImages" "$out"
 
@@ -401,6 +446,75 @@ check "the configuration file can select the Nobara sources" \
     "RPM: 5
 Flatpak: 4
 Total: 9" "$out"
+clear_config
+
+echo
+echo "# Debian and Ubuntu"
+run --tools apt -l
+check "apt counts the Debian packages with an update" \
+    "APT: 6
+Total: 6" "$out"
+check "counting Debian updates does not need root" \
+    "apt-get -q -s upgrade" "$(cat "$WORK/log")"
+
+run --tools apt
+check "apt refreshes the package lists, then installs the updates" \
+    "sudo apt-get update
+apt-get update
+sudo apt-get upgrade
+apt-get upgrade" "$(cat "$WORK/log")"
+
+STUB_APT_TRICKY=1 run --tools apt -l
+check "the count takes the Inst lines only, so the notes, the package list, the kept back packages and the Conf lines are left out" \
+    "APT: 2
+Total: 2" "$out"
+
+STUB_DEB_COUNT=0 run --tools apt -l
+check "an up-to-date Debian system counts zero" \
+    "APT: 0
+Total: 0" "$out"
+
+# Debian packages are their own kind of package, so an apt selection does
+# not clash with the Arch or RPM tools.
+run --tools "pacman dnf apt" -l
+check "apt does not clash with the other package tools" "" "$err"
+check "apt is counted next to them" \
+    "Pacman: 3
+RPM: 5
+APT: 6
+Total: 14" "$out"
+
+run --tools "apt flatpak gearlever" -l
+check "a Debian selection counts each source once" \
+    "APT: 6
+Flatpak: 4
+AppImage: 1
+Total: 11" "$out"
+
+STUB_APT_RC=1 run --tools "apt flatpak"
+check "a failed apt run fails the whole run" "1" "$rc"
+check "a failed refresh leaves the packages alone, and the other sources still update" \
+    "sudo apt-get update
+apt-get update
+flatpak update" "$(cat "$WORK/log")"
+
+set_config <<'EOF'
+# bs-updater update sources.
+pacman=off
+paru-repo=off
+paru-aur=off
+dnf=off
+nobara-sync=off
+apt=on
+flatpak=on
+gearlever=on
+EOF
+run -l
+check "the configuration file can select the Debian sources" \
+    "APT: 6
+Flatpak: 4
+AppImage: 1
+Total: 11" "$out"
 clear_config
 
 echo

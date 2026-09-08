@@ -17,6 +17,8 @@ KCM.SimpleKCM {
     property bool cfg_toolDnfDefault: false
     property alias cfg_toolNobaraSync: nobaraSyncBox.checked
     property bool cfg_toolNobaraSyncDefault: false
+    property alias cfg_toolApt: aptBox.checked
+    property bool cfg_toolAptDefault: false
     property alias cfg_toolFlatpak: flatpakBox.checked
     property bool cfg_toolFlatpakDefault: true
     property alias cfg_toolGearLever: gearLeverBox.checked
@@ -31,6 +33,7 @@ KCM.SimpleKCM {
         { box: paruAurBox,     covers: "aur",      name: i18n("paru") },
         { box: dnfBox,         covers: "rpm",      name: i18n("dnf") },
         { box: nobaraSyncBox,  covers: "rpm",      name: i18n("nobara-sync") },
+        { box: aptBox,         covers: "deb",      name: i18n("apt") },
         { box: flatpakBox,     covers: "flatpak",  name: i18n("flatpak") },
         { box: gearLeverBox,   covers: "appimage", name: i18n("Gear Lever") }
     ]
@@ -39,6 +42,7 @@ KCM.SimpleKCM {
         "repo": i18n("repository packages"),
         "aur": i18n("AUR packages"),
         "rpm": i18n("RPM packages"),
+        "deb": i18n("Debian packages"),
         "flatpak": i18n("Flatpak applications and runtimes"),
         "appimage": i18n("AppImages")
     })
@@ -120,6 +124,14 @@ KCM.SimpleKCM {
             Item { Kirigami.FormData.isSection: true }
 
             QQC2.CheckBox {
+                id: aptBox
+                Kirigami.FormData.label: i18n("Debian packages (Debian, Ubuntu):")
+                text: i18n("apt")
+            }
+
+            Item { Kirigami.FormData.isSection: true }
+
+            QQC2.CheckBox {
                 id: flatpakBox
                 Kirigami.FormData.label: i18n("Flatpak applications and runtimes:")
                 text: i18n("flatpak")
@@ -138,7 +150,7 @@ KCM.SimpleKCM {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             opacity: 0.7
-            text: i18n("An unchecked source is neither checked for updates nor updated. The tool of a checked source has to be installed. The defaults suit Arch: on Fedora check dnf, on Nobara check nobara-sync, and uncheck the Arch sources.")
+            text: i18n("An unchecked source is neither checked for updates nor updated. The tool of a checked source has to be installed. The defaults suit Arch: on Fedora check dnf, on Nobara check nobara-sync, on Debian or Ubuntu check apt, and uncheck the Arch sources.")
         }
     }
 }

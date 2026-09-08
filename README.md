@@ -1,7 +1,7 @@
 # bs-updater
 
-bs-updater updates all software on an Arch Linux system with one command.
-Future updates will support more Linux distributions.
+bs-updater updates all software on an Arch Linux, Fedora or Nobara system
+with one command.
 A tray widget for KDE Plasma tells you when updates are available.
 
 ## Update sources
@@ -9,22 +9,45 @@ A tray widget for KDE Plasma tells you when updates are available.
 bs-updater checks and updates these sources. You choose which of them to use
 in the widget settings.
 
-| Source | Tool | Enabled by default |
-| --- | --- | --- |
-| Repository packages | `pacman` | no |
-| Repository packages | `paru` | yes |
-| AUR packages | `paru` | yes |
-| Flatpak applications and runtimes | `flatpak` | yes |
-| AppImages integrated with Gear Lever | `Gear Lever` | yes |
+| Source | Tool | Distribution | Enabled by default |
+| --- | --- | --- | --- |
+| Repository packages | `pacman` | Arch | no |
+| Repository packages | `paru` | Arch | yes |
+| AUR packages | `paru` | Arch | yes |
+| RPM packages | `dnf` | Fedora | no |
+| RPM packages and Nobara fixups | `nobara-sync` | Nobara | no |
+| Flatpak applications and runtimes | `flatpak` | any | yes |
+| AppImages integrated with Gear Lever | `Gear Lever` | any | yes |
 
 paru is listed twice because it updates two kinds of package, and you can use
 it for one of them without the other.
+
+The defaults suit Arch. On Fedora check `dnf`, on Nobara check `nobara-sync`,
+and uncheck the Arch sources. See [Fedora and Nobara](#fedora-and-nobara).
 
 Two tools for the same kind of package would install the same updates twice
 and count them twice. bs-updater checks the selection for that: the settings
 show a warning, and `bs-update` uses only the first of the two and says so.
 This is why `pacman` is off by default, since `paru` already covers repository
-packages.
+packages, and why only one of `dnf` and `nobara-sync` may be checked.
+
+Arch repository packages and RPM packages are separate kinds of package, so
+`pacman` and `dnf` do not clash. A system has one or the other.
+
+## Fedora and Nobara
+
+On Fedora, check `dnf` under "Update sources" and uncheck the Arch sources.
+`bs-update` counts the available updates with `dnf check-update`, which needs
+no root, and installs them with `sudo dnf upgrade`.
+
+On Nobara, check `nobara-sync` instead. `nobara-sync cli` installs the system
+updates together with the Nobara fixups, and asks for the root password
+itself, so bs-updater does not run it through `sudo`. It counts its updates
+with `dnf check-update`, because `nobara-sync check-updates` would ask for the
+root password on every scheduled check.
+
+`nobara-sync cli` leaves Flatpaks alone unless it is given `--all`, so keep
+the `flatpak` source checked to have them updated and counted.
 
 ## Parts
 
@@ -48,7 +71,7 @@ packages.
 
 ## Requirements
 
-- Arch Linux
+- Arch Linux, Fedora, or Nobara
 - KDE Plasma 6
 - A terminal application. bs-updater uses the KDE default terminal. If none is set, it uses Konsole.
 - libnotify (supplies `notify-send`)
@@ -56,12 +79,15 @@ packages.
 Each update source needs its own tool. You only need the tools of the sources
 you enable:
 
-- paru, for repository packages and AUR packages
-- pacman-contrib (supplies `checkupdates`), to count repository updates
+- paru, for repository packages and AUR packages (Arch)
+- pacman-contrib (supplies `checkupdates`), to count repository updates (Arch)
+- dnf, for RPM packages (Fedora). dnf 4 and dnf 5 both work
+- nobara-sync, for RPM packages and the Nobara fixups (Nobara; part of the
+  distribution)
 - Flatpak, for Flatpak applications and runtimes
 - Gear Lever (Flatpak: `it.mijorus.gearlever`), for AppImages
 
-## Installation (Arch Linux)
+## Installation
 
 1. Clone the repository:
 
@@ -117,11 +143,14 @@ you use `bs-update` without the widget, write that file yourself:
 pacman=off
 paru-repo=on
 paru-aur=on
+dnf=off
+nobara-sync=off
 flatpak=on
 gearlever=on
 ```
 
-Without the file, every tool except `pacman` is enabled.
+Without the file, the Arch tools except `pacman` are enabled, along with
+`flatpak` and `gearlever`.
 
 ## Uninstall
 
@@ -136,8 +165,8 @@ Without the file, every tool except `pacman` is enabled.
 ## Tests
 
 `tests/run-tests.sh` tests the `bs-update` command. It replaces pacman, paru,
-Flatpak, and the other commands with stubs, so it installs nothing and runs on
-any machine:
+dnf, nobara-sync, Flatpak, and the other commands with stubs, so it installs
+nothing and runs on any machine:
 
 ```
 ./tests/run-tests.sh
@@ -145,7 +174,6 @@ any machine:
 
 ## Planned features
 
-- Support for Fedora (DNF)
 - Support for Debian and Ubuntu (APT)
 - Support for yay as an alternative AUR helper
 - Automatic detection of the installed package managers, to preselect the update sources

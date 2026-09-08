@@ -44,6 +44,46 @@ cat > "$STUB_BIN/pacman" <<'EOF'
 echo "pacman $*" >> "$STUB_LOG"
 EOF
 
+# dnf reports one package per line as "name.arch version repository".
+# STUB_DNF_TRICKY makes it print the awkward parts of a real report as
+# well: the metadata line, a blank line, a package name long enough to
+# wrap onto a second indented line, and the trailing "Obsoleting Packages"
+# section that repeats packages already listed above.
+cat > "$STUB_BIN/dnf" <<'EOF'
+#!/bin/sh
+echo "dnf $*" >> "$STUB_LOG"
+case "$*" in
+*check-update*)
+    if [ "${STUB_DNF_TRICKY:-0}" -eq 1 ]; then
+        cat <<'REPORT'
+Last metadata expiration check: 0:12:34 ago on Mon 08 Sep 2026 10:00:00 AM EDT.
+
+bash.x86_64                          5.2.26-1.fc40            updates
+kernel.x86_64                        6.9.4-200.fc40           updates
+really-long-package-name-goes-here.noarch
+                                     1.0-1.fc40               updates
+
+Obsoleting Packages
+foo.noarch                           2.0-1.fc40               updates
+    bar.noarch                       1.0-1.fc40               @System
+REPORT
+        exit 100
+    fi
+    i=1
+    while [ "$i" -le "${STUB_RPM_COUNT:-0}" ]; do
+        echo "package-$i.x86_64  1.0-$i.fc40  updates"
+        i=$((i + 1))
+    done
+    ;;
+esac
+exit "${STUB_DNF_RC:-0}"
+EOF
+
+cat > "$STUB_BIN/nobara-sync" <<'EOF'
+#!/bin/sh
+echo "nobara-sync $*" >> "$STUB_LOG"
+EOF
+
 cat > "$STUB_BIN/sudo" <<'EOF'
 #!/bin/sh
 echo "sudo $*" >> "$STUB_LOG"
@@ -147,9 +187,11 @@ clear_config() {
 
 STUB_REPO_COUNT=3
 STUB_AUR_COUNT=2
+STUB_RPM_COUNT=5
 STUB_FLATPAK_COUNT=4
 STUB_APPIMAGE_COUNT=1
-export STUB_REPO_COUNT STUB_AUR_COUNT STUB_FLATPAK_COUNT STUB_APPIMAGE_COUNT
+export STUB_REPO_COUNT STUB_AUR_COUNT STUB_RPM_COUNT
+export STUB_FLATPAK_COUNT STUB_APPIMAGE_COUNT
 
 echo "# Defaults, without a configuration file"
 clear_config
@@ -261,16 +303,105 @@ set_config <<'EOF'
 pacman=off
 paru-repo=on
 paru-aur=on
+dnf=off
+nobara-sync=off
 flatpak=on
 gearlever=on
 EOF
 run --list-tools
 check "--list-tools shows every tool and its state" \
-    "pacman     off pacman: repository packages
-paru-repo  on  paru (repository packages): repository packages
-paru-aur   on  paru (AUR packages): AUR packages
-flatpak    on  Flatpak: Flatpak applications and runtimes
-gearlever  on  Gear Lever: AppImages" "$out"
+    "pacman       off pacman: repository packages
+paru-repo    on  paru (repository packages): repository packages
+paru-aur     on  paru (AUR packages): AUR packages
+dnf          off DNF: RPM packages
+nobara-sync  off nobara-sync: RPM packages
+flatpak      on  Flatpak: Flatpak applications and runtimes
+gearlever    on  Gear Lever: AppImages" "$out"
+
+echo
+echo "# Fedora and Nobara"
+run --tools dnf -l
+check "dnf counts the RPM packages with an update" \
+    "RPM: 5
+Total: 5" "$out"
+check "counting RPM updates does not need root" \
+    "dnf -q check-update" "$(cat "$WORK/log")"
+
+run --tools dnf
+check "dnf installs the RPM updates" \
+    "sudo dnf upgrade
+dnf upgrade" "$(cat "$WORK/log")"
+
+STUB_DNF_TRICKY=1 run --tools dnf -l
+check "the count skips the metadata line, wrapped names are counted once, and the obsoleting section is not counted twice" \
+    "RPM: 3
+Total: 3" "$out"
+
+STUB_RPM_COUNT=0 run --tools dnf -l
+check "an up-to-date Fedora system counts zero" \
+    "RPM: 0
+Total: 0" "$out"
+
+run --tools nobara-sync -l
+check "nobara-sync counts its RPM updates with dnf" \
+    "RPM: 5
+Total: 5" "$out"
+
+run --tools nobara-sync
+check "nobara-sync runs its own cli mode and raises its own privileges" \
+    "nobara-sync cli" "$(cat "$WORK/log")"
+
+run --tools "dnf nobara-sync" -l
+check "dnf and nobara-sync are reported as covering the same packages" \
+    "bs-update: DNF and nobara-sync both update RPM packages; using DNF" "$err"
+check "only one RPM tool is counted" \
+    "RPM: 5
+Total: 5" "$out"
+
+run --tools "nobara-sync flatpak gearlever" -l
+check "a Nobara selection counts each source once" \
+    "RPM: 5
+Flatpak: 4
+AppImage: 1
+Total: 10" "$out"
+
+run --tools "nobara-sync flatpak"
+check "nobara-sync leaves Flatpaks to the flatpak tool" \
+    "nobara-sync cli
+flatpak update" "$(cat "$WORK/log")"
+
+# Arch repository packages and RPM packages are different package sets, so
+# a tool for one says nothing about the other and neither is dropped.
+run --tools "pacman dnf" -l
+check "pacman and dnf do not clash" "" "$err"
+check "pacman and dnf are counted separately" \
+    "Pacman: 3
+RPM: 5
+Total: 8" "$out"
+
+STUB_DNF_RC=1 run --tools "dnf flatpak"
+check "a failed dnf run fails the whole run" "1" "$rc"
+check "a failed dnf run still updates the other sources" \
+    "sudo dnf upgrade
+dnf upgrade
+flatpak update" "$(cat "$WORK/log")"
+
+set_config <<'EOF'
+# bs-updater update sources.
+pacman=off
+paru-repo=off
+paru-aur=off
+dnf=off
+nobara-sync=on
+flatpak=on
+gearlever=off
+EOF
+run -l
+check "the configuration file can select the Nobara sources" \
+    "RPM: 5
+Flatpak: 4
+Total: 9" "$out"
+clear_config
 
 echo
 echo "# Notifications"

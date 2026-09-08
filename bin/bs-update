@@ -1,5 +1,5 @@
 #!/bin/sh
-# bs-updater: update all software sources on an Arch Linux system.
+# bs-updater: update all software sources on a Linux system.
 #
 # Usage:
 #   bs-update                  update every enabled source
@@ -15,10 +15,12 @@
 #   bs-update --in-terminal    run bs-update in a new terminal window
 #   bs-update -h, --help       show this help text
 #
-# The supported tools are pacman, paru-repo, paru-aur, flatpak, and
-# gearlever. The tray widget writes the enabled ones to
-# ~/.config/bs-updater/tools.conf. Without that file every tool except
-# pacman is enabled, because paru already updates repository packages.
+# The supported tools are pacman, paru-repo, paru-aur, dnf, nobara-sync,
+# flatpak, and gearlever. The tray widget writes the enabled ones to
+# ~/.config/bs-updater/tools.conf. Without that file the Arch tools except
+# pacman are enabled, because paru already updates repository packages.
+# On Fedora enable dnf, and on Nobara enable nobara-sync, in the widget
+# settings or in that file.
 #
 # The notification is clickable. A click runs bs-update in a terminal window.
 
@@ -39,18 +41,25 @@ CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/bs-updater/tools.conf"
 TOOLS='pacman|repo|pacman
 paru-repo|repo|paru (repository packages)
 paru-aur|aur|paru (AUR packages)
+dnf|rpm|DNF
+nobara-sync|rpm|nobara-sync
 flatpak|flatpak|Flatpak
 gearlever|appimage|Gear Lever'
 
 # The kinds of package a tool can cover. One line each:
 #   id|heading used in the list output|name shown to the user
+# Arch repository packages and RPM packages are separate domains: a system
+# has one or the other, and a tool for one says nothing about the other.
 DOMAINS='repo|Pacman|repository packages
 aur|AUR|AUR packages
+rpm|RPM|RPM packages
 flatpak|Flatpak|Flatpak applications and runtimes
 appimage|AppImage|AppImages'
 
 # Used when the configuration file does not exist. paru covers repository
-# packages, so plain pacman stays off and the two do not conflict.
+# packages, so plain pacman stays off and the two do not conflict. The RPM
+# tools stay off as well: this default is for Arch, and Fedora and Nobara
+# users pick their tool in the widget settings.
 DEFAULT_TOOLS='paru-repo paru-aur flatpak gearlever'
 
 warn() {
@@ -135,11 +144,28 @@ resolve_tools() {
     printf '%s' "${resolved# }"
 }
 
+# The number of RPM packages with an update available. dnf reports them on
+# stdout, one package per line, as "name.arch version repository". Long
+# names wrap onto a second, indented line, so only lines that start in the
+# first column count. The trailing "Obsoleting Packages" section repeats
+# packages that are already listed above, so counting stops there. Works
+# with both dnf 4 and dnf 5, and needs no root.
+count_rpm() {
+    dnf -q check-update 2>/dev/null | awk '
+        /^Obsoleting Packages/ { exit }
+        /^[^[:space:]]/ && $1 ~ /\./ { n++ }
+        END { print n + 0 }'
+}
+
 # The number of updates one tool has available.
 count_tool() {
     case "$1" in
     pacman|paru-repo) checkupdates 2>/dev/null | grep -c . ;;
     paru-aur)         paru -Qua 2>/dev/null | grep -c . ;;
+    # nobara-sync installs its system updates with dnf, so dnf counts them.
+    # Its own check-updates command would ask for the root password, which
+    # a scheduled check from the tray widget cannot answer.
+    dnf|nobara-sync)  count_rpm ;;
     flatpak)          flatpak remote-ls --updates 2>/dev/null | grep -c . ;;
     # --all checks each integrated AppImage and downloads only those with
     # a newer version available. --yes skips the interactive question.
@@ -154,6 +180,12 @@ update_tool() {
     pacman)    sudo pacman -Syu ;;
     paru-repo) paru -Syu --repo ;;
     paru-aur)  paru -Sua ;;
+    dnf)       sudo dnf upgrade ;;
+    # nobara-sync raises its own privileges with sudo or pkexec, so it is
+    # not run through sudo here. "cli" installs the system updates and the
+    # Nobara fixups; it leaves Flatpaks alone unless given --all, so the
+    # flatpak tool stays in charge of those.
+    nobara-sync) nobara-sync cli ;;
     flatpak)   flatpak update ;;
     gearlever) $GEARLEVER --update --all --yes ;;
     esac
@@ -249,7 +281,7 @@ do_list_tools() {
     printf '%s\n' "$TOOLS" | while IFS='|' read -r id domain name; do
         state="off"
         case " $ENABLED " in *" $id "*) state="on" ;; esac
-        printf '%-10s %-3s %s: %s\n' "$id" "$state" "$name" "$(domain_name "$domain")"
+        printf '%-12s %-3s %s: %s\n' "$id" "$state" "$name" "$(domain_name "$domain")"
     done
 }
 

@@ -47,6 +47,8 @@ PlasmoidItem {
         "pacman=" + (Plasmoid.configuration.toolPacman ? "on" : "off") + "\n" +
         "paru-repo=" + (Plasmoid.configuration.toolParuRepo ? "on" : "off") + "\n" +
         "paru-aur=" + (Plasmoid.configuration.toolParuAur ? "on" : "off") + "\n" +
+        "dnf=" + (Plasmoid.configuration.toolDnf ? "on" : "off") + "\n" +
+        "nobara-sync=" + (Plasmoid.configuration.toolNobaraSync ? "on" : "off") + "\n" +
         "flatpak=" + (Plasmoid.configuration.toolFlatpak ? "on" : "off") + "\n" +
         "gearlever=" + (Plasmoid.configuration.toolGearLever ? "on" : "off") + "\n"
 

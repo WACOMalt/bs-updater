@@ -33,6 +33,18 @@
             <label>Update AUR packages with paru</label>
             <default>true</default>
         </entry>
+        <!-- The RPM tools are off by default. These defaults describe an
+             Arch system; a Fedora or Nobara user turns their tool on here
+             and the Arch ones off. dnf and nobara-sync both update RPM
+             packages, so only one of the two may be on. -->
+        <entry name="toolDnf" type="Bool">
+            <label>Update RPM packages with dnf</label>
+            <default>false</default>
+        </entry>
+        <entry name="toolNobaraSync" type="Bool">
+            <label>Update RPM packages and Nobara fixups with nobara-sync</label>
+            <default>false</default>
+        </entry>
         <entry name="toolFlatpak" type="Bool">
             <label>Update Flatpak applications and runtimes</label>
             <default>true</default>

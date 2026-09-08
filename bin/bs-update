@@ -2,15 +2,23 @@
 # bs-updater: update all software sources on an Arch Linux system.
 #
 # Usage:
-#   bs-update                  update pacman, AUR, Flatpak, and AppImage software
+#   bs-update                  update every enabled source
 #   bs-update -l, --list       show the number of available updates per source
 #   bs-update -l --notify      also show a notification if updates are available
 #   bs-update -l --notify-always
 #                               also show a notification when the system is up to date
 #   bs-update -l --notify-uptodate
 #                               only show the up-to-date notification
+#   bs-update --tools LIST     use this comma or space separated list of tools
+#                               for this run instead of the configured one
+#   bs-update --list-tools     show every supported tool and whether it is enabled
 #   bs-update --in-terminal    run bs-update in a new terminal window
 #   bs-update -h, --help       show this help text
+#
+# The supported tools are pacman, paru-repo, paru-aur, flatpak, and
+# gearlever. The tray widget writes the enabled ones to
+# ~/.config/bs-updater/tools.conf. Without that file every tool except
+# pacman is enabled, because paru already updates repository packages.
 #
 # The notification is clickable. A click runs bs-update in a terminal window.
 
@@ -20,14 +28,135 @@
 GEARLEVER="env -u DISPLAY -u WAYLAND_DISPLAY flatpak run it.mijorus.gearlever"
 SELF=$(readlink -f "$0" 2>/dev/null || echo "$0")
 
-usage() {
-    sed -n '2,15p' "$SELF" | sed 's/^# \{0,1\}//'
+# The tray widget writes this file whenever its settings change.
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/bs-updater/tools.conf"
+
+# Every tool bs-update can drive, in the order it runs them. One line each:
+#   id|package domain|name shown to the user
+# paru appears twice because it updates two kinds of package. Tools that
+# share a domain update the same packages, so only one of them may run;
+# see resolve_tools.
+TOOLS='pacman|repo|pacman
+paru-repo|repo|paru (repository packages)
+paru-aur|aur|paru (AUR packages)
+flatpak|flatpak|Flatpak
+gearlever|appimage|Gear Lever'
+
+# The kinds of package a tool can cover. One line each:
+#   id|heading used in the list output|name shown to the user
+DOMAINS='repo|Pacman|repository packages
+aur|AUR|AUR packages
+flatpak|Flatpak|Flatpak applications and runtimes
+appimage|AppImage|AppImages'
+
+# Used when the configuration file does not exist. paru covers repository
+# packages, so plain pacman stays off and the two do not conflict.
+DEFAULT_TOOLS='paru-repo paru-aur flatpak gearlever'
+
+warn() {
+    echo "bs-update: $*" >&2
 }
 
-# --all checks each integrated AppImage and downloads only those with a
-# newer version available. --yes skips the interactive question.
-update_appimages() {
-    $GEARLEVER --update --all --yes
+usage() {
+    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$SELF"
+}
+
+# field <table> <id> <column>: print one column of the table row for <id>,
+# or nothing when the table has no such row.
+field() {
+    printf '%s\n' "$1" | while IFS='|' read -r c1 c2 c3; do
+        [ "$c1" = "$2" ] || continue
+        case "$3" in
+        2) printf '%s' "$c2" ;;
+        3) printf '%s' "$c3" ;;
+        esac
+        break
+    done
+}
+
+tool_domain()    { field "$TOOLS" "$1" 2; }
+tool_name()      { field "$TOOLS" "$1" 3; }
+domain_heading() { field "$DOMAINS" "$1" 2; }
+domain_name()    { field "$DOMAINS" "$1" 3; }
+
+has_tool() {
+    case " $ENABLED " in *" $1 "*) return 0 ;; esac
+    return 1
+}
+
+# drop_tools <list> <ids to remove>: print <list> without those ids.
+drop_tools() {
+    kept=
+    for drop_id in $1; do
+        case " $2 " in *" $drop_id "*) continue ;; esac
+        kept="$kept $drop_id"
+    done
+    printf '%s' "${kept# }"
+}
+
+# Read the enabled tools from the file the widget writes. Its lines look
+# like "flatpak=on". Any value other than on, true, 1, or yes disables the
+# tool. An existing file with nothing enabled stays empty on purpose.
+read_config_tools() {
+    selected=
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in ''|'#'*) continue ;; esac
+        case "${line#*=}" in
+        on|true|1|yes) selected="$selected ${line%%=*}" ;;
+        esac
+    done < "$CONFIG_FILE"
+    printf '%s' "${selected# }"
+}
+
+# Sanity check a list of tools. Drops names this version does not know,
+# and drops a tool when an earlier one in the list already covers the same
+# kind of package: two of them would install the same updates twice and
+# count them twice. Every drop is reported.
+resolve_tools() {
+    resolved=
+    covered=
+    for id in $1; do
+        domain=$(tool_domain "$id")
+        if [ -z "$domain" ]; then
+            warn "unknown tool '$id' - ignored"
+            continue
+        fi
+        owner=
+        for pair in $covered; do
+            case "$pair" in "$domain:"*) owner=${pair#*:} ;; esac
+        done
+        if [ -n "$owner" ]; then
+            warn "$(tool_name "$owner") and $(tool_name "$id") both update $(domain_name "$domain"); using $(tool_name "$owner")"
+            continue
+        fi
+        covered="$covered $domain:$id"
+        resolved="$resolved $id"
+    done
+    printf '%s' "${resolved# }"
+}
+
+# The number of updates one tool has available.
+count_tool() {
+    case "$1" in
+    pacman|paru-repo) checkupdates 2>/dev/null | grep -c . ;;
+    paru-aur)         paru -Qua 2>/dev/null | grep -c . ;;
+    flatpak)          flatpak remote-ls --updates 2>/dev/null | grep -c . ;;
+    # --all checks each integrated AppImage and downloads only those with
+    # a newer version available. --yes skips the interactive question.
+    gearlever)        $GEARLEVER --list-updates 2>/dev/null \
+                      | grep -v '^No updates available' | grep -c . ;;
+    esac
+}
+
+# Install the updates one tool has available.
+update_tool() {
+    case "$1" in
+    pacman)    sudo pacman -Syu ;;
+    paru-repo) paru -Syu --repo ;;
+    paru-aur)  paru -Sua ;;
+    flatpak)   flatpak update ;;
+    gearlever) $GEARLEVER --update --all --yes ;;
+    esac
 }
 
 # The widget watches this file. A new timestamp tells the widget that an
@@ -40,7 +169,23 @@ mark_updated() {
 }
 
 do_update() {
-    paru -Syu && flatpak update && update_appimages && mark_updated
+    if [ -z "$ENABLED" ]; then
+        warn "no update tools are enabled; nothing to update"
+        return 1
+    fi
+    steps=$ENABLED
+    rc=0
+    # paru updates repository and AUR packages in one transaction, so run
+    # it once when both of its entries are enabled.
+    if has_tool paru-repo && has_tool paru-aur; then
+        steps=$(drop_tools "$steps" "paru-repo paru-aur")
+        paru -Syu || rc=1
+    fi
+    for id in $steps; do
+        update_tool "$id" || rc=1
+    done
+    [ "$rc" -eq 0 ] || return 1
+    mark_updated
 }
 
 # Open the user's terminal application and run bs-update inside it.
@@ -50,7 +195,7 @@ open_in_terminal() {
     term=$(kreadconfig6 --file kdeglobals --group General --key TerminalApplication 2>/dev/null)
     [ -n "$term" ] || term="${TERMINAL:-}"
     [ -n "$term" ] || term=konsole
-    $term -e sh -c "'$SELF'; printf '\nFinished. Press Enter to close.'; read line"
+    $term -e sh -c "'$SELF'$tools_arg; printf '\nFinished. Press Enter to close.'; read line"
 }
 
 show_notification() {
@@ -61,7 +206,7 @@ show_notification() {
             choice=$(notify-send -a "bs-updater" -i update-high -t 0 \
                 -A default="Update now" \
                 "$total updates available" \
-                "Pacman $repo | AUR $aur | Flatpak $fp | AppImage $ai — click to update system")
+                "$summary — click to update system")
             if [ -n "$choice" ]; then
                 open_in_terminal
             fi
@@ -77,15 +222,19 @@ show_notification() {
 }
 
 do_list() {
-    repo=$(checkupdates 2>/dev/null | grep -c .)
-    aur=$(paru -Qua 2>/dev/null | grep -c .)
-    fp=$(flatpak remote-ls --updates 2>/dev/null | grep -c .)
-    ai=$($GEARLEVER --list-updates 2>/dev/null \
-         | grep -v '^No updates available' | grep -c .)
-    total=$((repo + aur + fp + ai))
-
-    printf 'Pacman: %s\nAUR: %s\nFlatpak: %s\nAppImage: %s\nTotal: %s\n' \
-        "$repo" "$aur" "$fp" "$ai" "$total"
+    total=0
+    summary=
+    for id in $ENABLED; do
+        heading=$(domain_heading "$(tool_domain "$id")")
+        count=$(count_tool "$id")
+        case "$count" in ''|*[!0-9]*) count=0 ;; esac
+        total=$((total + count))
+        printf '%s: %s\n' "$heading" "$count"
+        summary="$summary$heading $count | "
+    done
+    summary=${summary%" | "}
+    printf 'Total: %s\n' "$total"
+    [ -n "$ENABLED" ] || warn "no update tools are enabled; nothing was checked"
 
     case "$1" in
     --notify|--notify-always|--notify-uptodate)
@@ -94,10 +243,56 @@ do_list() {
     esac
 }
 
-case "$1" in
-    "")            do_update ;;
-    -l|--list)     do_list "$2" ;;
-    --in-terminal) open_in_terminal ;;
-    -h|--help)     usage ;;
-    *)             usage; exit 1 ;;
+# Show every supported tool so the choice in the widget can be checked
+# from a terminal as well.
+do_list_tools() {
+    printf '%s\n' "$TOOLS" | while IFS='|' read -r id domain name; do
+        state="off"
+        case " $ENABLED " in *" $id "*) state="on" ;; esac
+        printf '%-10s %-3s %s: %s\n' "$id" "$state" "$name" "$(domain_name "$domain")"
+    done
+}
+
+mode=update
+notify=
+tools=
+tools_arg=
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+    -l|--list)     mode=list ;;
+    --list-tools)  mode=list-tools ;;
+    --in-terminal) mode=terminal ;;
+    --notify|--notify-always|--notify-uptodate) notify=$1 ;;
+    --tools)
+        shift
+        [ $# -gt 0 ] || { warn "--tools needs a list of tools"; exit 1; }
+        tools=$1
+        ;;
+    --tools=*)     tools=${1#--tools=} ;;
+    -h|--help)     usage; exit 0 ;;
+    "")            ;;
+    *)             usage >&2; exit 1 ;;
+    esac
+    shift
+done
+
+# An explicit choice wins over the configured one, and a configuration
+# file with everything switched off means exactly that.
+if [ -n "$tools" ]; then
+    # Pass the choice on to the run started from the notification.
+    tools_arg=" --tools '$tools'"
+elif [ -r "$CONFIG_FILE" ]; then
+    tools=$(read_config_tools)
+else
+    tools=$DEFAULT_TOOLS
+fi
+
+ENABLED=$(resolve_tools "$(printf '%s' "$tools" | tr ',' ' ')")
+
+case "$mode" in
+update)     do_update ;;
+list)       do_list "$notify" ;;
+list-tools) do_list_tools ;;
+terminal)   open_in_terminal ;;
 esac

@@ -6,4 +6,9 @@ ConfigModel {
         icon: "configure"
         source: "configGeneral.qml"
     }
+    ConfigCategory {
+        name: "Update sources"
+        icon: "system-software-update"
+        source: "configSources.qml"
+    }
 }

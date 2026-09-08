@@ -22,10 +22,12 @@ Copy this text into the store description field:
 > notification to install all updates in a terminal window.
 >
 > The widget installs the `bs-update` terminal command to `~/.local/bin` on
-> first start. You can set the check interval and choose which notifications
-> to show. With the tray entry set to "Shown when relevant", the icon hides
-> while the system is up to date. Requirements: Arch Linux, paru,
-> pacman-contrib, Flatpak, Gear Lever, and a terminal application. Support
+> first start. You can set the check interval, choose which notifications to
+> show, and check or uncheck each update source. The settings warn you when
+> two of the selected tools update the same kind of package. With the tray
+> entry set to "Shown when relevant", the icon hides while the system is up
+> to date. Requirements: Arch Linux, pacman-contrib, a terminal application,
+> and the tool of every source you enable: paru, Flatpak, Gear Lever. Support
 > for more distributions is planned.
 >
 > Source: https://github.com/WACOMalt/bs-updater

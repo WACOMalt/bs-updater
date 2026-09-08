@@ -6,15 +6,28 @@ set -e
 REPO_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 BIN_DIR="$HOME/.local/bin"
 
+# Needed whichever update sources you use.
 missing=""
-for cmd in paru checkupdates flatpak notify-send; do
+for cmd in notify-send; do
     command -v "$cmd" >/dev/null 2>&1 || missing="$missing $cmd"
 done
-flatpak info it.mijorus.gearlever >/dev/null 2>&1 || missing="$missing gearlever(flatpak)"
 if [ -n "$missing" ]; then
     echo "Missing requirements:$missing"
     echo "Install them, then run this script again."
     exit 1
+fi
+
+# Needed per update source. A source you do not use can stay unchecked in
+# the widget settings, so a missing tool is only a warning.
+absent=""
+command -v paru >/dev/null 2>&1 || absent="$absent paru(repository and AUR packages)"
+command -v checkupdates >/dev/null 2>&1 || absent="$absent pacman-contrib(counts repository updates)"
+command -v flatpak >/dev/null 2>&1 || absent="$absent flatpak(Flatpak applications)"
+flatpak info it.mijorus.gearlever >/dev/null 2>&1 || absent="$absent gearlever(AppImages)"
+if [ -n "$absent" ]; then
+    echo "These update sources have no tool installed:$absent"
+    echo "Install the ones you want, and uncheck the rest in the widget settings."
+    echo
 fi
 
 echo "Installing the bs-update command..."

@@ -17,5 +17,29 @@
             <label>Show a notification when a manual check finds no updates</label>
             <default>true</default>
         </entry>
+        <!-- One entry per tool bs-update can drive. paru appears twice
+             because it updates two kinds of package. paru covers
+             repository packages already, so pacman stays off by default:
+             the two of them together would do the same work twice. -->
+        <entry name="toolPacman" type="Bool">
+            <label>Update repository packages with pacman</label>
+            <default>false</default>
+        </entry>
+        <entry name="toolParuRepo" type="Bool">
+            <label>Update repository packages with paru</label>
+            <default>true</default>
+        </entry>
+        <entry name="toolParuAur" type="Bool">
+            <label>Update AUR packages with paru</label>
+            <default>true</default>
+        </entry>
+        <entry name="toolFlatpak" type="Bool">
+            <label>Update Flatpak applications and runtimes</label>
+            <default>true</default>
+        </entry>
+        <entry name="toolGearLever" type="Bool">
+            <label>Update AppImages with Gear Lever</label>
+            <default>true</default>
+        </entry>
     </group>
 </kcfg>

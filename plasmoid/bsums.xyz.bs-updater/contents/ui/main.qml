@@ -49,6 +49,7 @@ PlasmoidItem {
         "paru-aur=" + (Plasmoid.configuration.toolParuAur ? "on" : "off") + "\n" +
         "dnf=" + (Plasmoid.configuration.toolDnf ? "on" : "off") + "\n" +
         "nobara-sync=" + (Plasmoid.configuration.toolNobaraSync ? "on" : "off") + "\n" +
+        "nobara-sync-flatpak=" + (Plasmoid.configuration.toolNobaraSyncFlatpak ? "on" : "off") + "\n" +
         "apt=" + (Plasmoid.configuration.toolApt ? "on" : "off") + "\n" +
         "flatpak=" + (Plasmoid.configuration.toolFlatpak ? "on" : "off") + "\n" +
         "gearlever=" + (Plasmoid.configuration.toolGearLever ? "on" : "off") + "\n" +

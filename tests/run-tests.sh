@@ -358,7 +358,8 @@ check "--list-tools shows every tool and its state" \
 paru-repo    on  asks       paru (repository packages): repository packages
 paru-aur     on  asks       paru (AUR packages): AUR packages
 dnf          off asks       DNF: RPM packages
-nobara-sync  off asks       nobara-sync: RPM packages
+nobara-sync  off asks       nobara-sync (RPM packages): RPM packages
+nobara-sync-flatpak off asks       nobara-sync (Flatpak applications): Flatpak applications and runtimes
 apt          off asks       APT: Debian packages
 flatpak      on  asks       Flatpak: Flatpak applications and runtimes
 gearlever    on  asks       Gear Lever: AppImages
@@ -399,7 +400,7 @@ check "nobara-sync runs its own cli mode and raises its own privileges" \
 
 run --tools "dnf nobara-sync" -l
 check "dnf and nobara-sync are reported as covering the same packages" \
-    "bs-update: DNF and nobara-sync both update RPM packages; using DNF" "$err"
+    "bs-update: DNF and nobara-sync (RPM packages) both update RPM packages; using DNF" "$err"
 check "only one RPM tool is counted" \
     "RPM: 5
 Total: 5" "$out"
@@ -551,6 +552,39 @@ flatpak update
 flatpak run it.mijorus.gearlever --update --all --yes" "$(cat "$WORK/log")"
 check "a failed run writes no state file, so the widget keeps its icon" \
     "no" "$([ -f "$XDG_CACHE_HOME/bs-updater/last-update" ] && echo yes || echo no)"
+
+echo
+echo "# nobara-sync and Flatpak applications"
+clear_config
+
+run --tools nobara-sync,nobara-sync-flatpak -l
+check "both nobara-sync entries count their own kind of package" \
+    "RPM: 5
+Flatpak: 4
+Total: 9" "$out"
+
+run --tools nobara-sync,nobara-sync-flatpak
+check "one nobara-sync run covers both, with --all" \
+    "nobara-sync cli --all" "$(cat "$WORK/log")"
+
+run --tools nobara-sync
+check "nobara-sync alone leaves the Flatpak applications alone" \
+    "nobara-sync cli" "$(cat "$WORK/log")"
+
+run --tools nobara-sync-flatpak -l
+contains "the Flatpak entry alone is refused" \
+    "only together with the RPM packages" "$err"
+check "and nothing is counted" "Total: 0" "$out"
+
+run --tools nobara-sync-flatpak,flatpak -l
+contains "nobara-sync and flatpak clash over the same packages" \
+    "both update Flatpak applications" "$err"
+
+run --tools nobara-sync,nobara-sync-flatpak,flatpak -l
+check "the clash leaves one count, not two" \
+    "RPM: 5
+Flatpak: 4
+Total: 9" "$out"
 
 echo
 echo "# The interaction level"

@@ -18,10 +18,13 @@ in the widget settings.
 | RPM packages and Nobara fixups | `nobara-sync` | Nobara | no |
 | Debian packages | `apt` | Debian, Ubuntu | no |
 | Flatpak applications and runtimes | `flatpak` | any | yes |
+| Flatpak applications and runtimes | `nobara-sync` | Nobara | no |
 | AppImages integrated with Gear Lever | `Gear Lever` | any | yes |
 
 paru is listed twice because it updates two kinds of package, and you can use
-it for one of them without the other.
+it for one of them without the other. nobara-sync is listed twice for the same
+reason, but it has no Flatpak-only mode: its Flatpak entry needs its RPM entry
+as well. See [Fedora and Nobara](#fedora-and-nobara).
 
 The defaults suit Arch. On Fedora check `dnf`, on Nobara check `nobara-sync`,
 on Debian or Ubuntu check `apt`, and uncheck the Arch sources. See
@@ -50,8 +53,20 @@ itself, so bs-updater does not run it through `sudo`. It counts its updates
 with `dnf check-update`, because `nobara-sync check-updates` would ask for the
 root password on every scheduled check.
 
-`nobara-sync cli` leaves Flatpaks alone unless it is given `--all`, so keep
-the `flatpak` source checked to have them updated and counted.
+nobara-sync updates Flatpak applications as well, with its `--all` option, so
+it is listed a second time under Flatpak applications. Choose one of these two
+ways to have Flatpaks updated:
+
+- Check `flatpak`, and leave the nobara-sync Flatpak entry unchecked.
+  `bs-update` then runs `nobara-sync cli` for the RPM packages and `flatpak`
+  for the Flatpaks.
+- Check the nobara-sync Flatpak entry, and leave `flatpak` unchecked.
+  `bs-update` then runs `nobara-sync cli --all` one time, which covers both.
+
+nobara-sync has no Flatpak-only mode, so its Flatpak entry needs its RPM entry
+as well. `bs-update` says so and ignores the Flatpak entry if the RPM entry is
+unchecked. Counting is the same either way, because nobara-sync updates
+Flatpaks with `flatpak` underneath.
 
 ## Debian and Ubuntu
 
@@ -223,6 +238,7 @@ paru-repo=on
 paru-aur=on
 dnf=off
 nobara-sync=off
+nobara-sync-flatpak=off
 apt=off
 flatpak=on
 gearlever=on

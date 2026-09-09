@@ -21,7 +21,7 @@
 #   bs-update -h, --help       show this help text
 #
 # The supported tools are pacman, paru-repo, paru-aur, dnf, nobara-sync,
-# apt, flatpak, and gearlever. The tray widget writes the enabled ones to
+# nobara-sync-flatpak, apt, flatpak, and gearlever. The tray widget writes the enabled ones to
 # ~/.config/bs-updater/tools.conf. Without that file the Arch tools except
 # pacman are enabled, because paru already updates repository packages.
 # On Fedora enable dnf, on Nobara enable nobara-sync, and on Debian or
@@ -50,14 +50,15 @@ CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/bs-updater/tools.conf"
 
 # Every tool bs-update can drive, in the order it runs them. One line each:
 #   id|package domain|name shown to the user
-# paru appears twice because it updates two kinds of package. Tools that
-# share a domain update the same packages, so only one of them may run;
-# see resolve_tools.
+# paru and nobara-sync each appear twice because they update two kinds of
+# package. Tools that share a domain update the same packages, so only one
+# of them may run; see resolve_tools.
 TOOLS='pacman|repo|pacman
 paru-repo|repo|paru (repository packages)
 paru-aur|aur|paru (AUR packages)
 dnf|rpm|DNF
-nobara-sync|rpm|nobara-sync
+nobara-sync|rpm|nobara-sync (RPM packages)
+nobara-sync-flatpak|flatpak|nobara-sync (Flatpak applications)
 apt|deb|APT
 flatpak|flatpak|Flatpak
 gearlever|appimage|Gear Lever'
@@ -178,6 +179,20 @@ resolve_tools() {
         covered="$covered $domain:$id"
         resolved="$resolved $id"
     done
+    # nobara-sync updates Flatpak applications only together with the RPM
+    # packages, with its --all option. It has no Flatpak-only mode, so the
+    # Flatpak entry needs the RPM entry as well.
+    case " $resolved " in
+    *" nobara-sync-flatpak "*)
+        case " $resolved " in
+        *" nobara-sync "*) ;;
+        *)
+            warn "nobara-sync updates Flatpak applications only together with the RPM packages; enable nobara-sync for RPM packages as well, or use flatpak"
+            resolved=$(drop_tools "$resolved" "nobara-sync-flatpak")
+            ;;
+        esac
+        ;;
+    esac
     printf '%s' "${resolved# }"
 }
 
@@ -220,7 +235,10 @@ count_tool() {
     # a scheduled check from the tray widget cannot answer.
     dnf|nobara-sync)  count_rpm ;;
     apt)              count_deb ;;
-    flatpak)          flatpak remote-ls --updates 2>/dev/null | grep -c . ;;
+    # nobara-sync updates Flatpak applications with flatpak underneath,
+    # so the same command counts them.
+    flatpak|nobara-sync-flatpak)
+                      flatpak remote-ls --updates 2>/dev/null | grep -c . ;;
     # --all checks each integrated AppImage and downloads only those with
     # a newer version available. --yes skips the interactive question.
     gearlever)        $GEARLEVER --list-updates 2>/dev/null \
@@ -325,6 +343,12 @@ do_update() {
         yes=
         [ "$INTERACTION" = confirm ] || yes=yes
         paru $PARU_SUDO -Syu ${yes:+--noconfirm --skipreview} || rc=1
+    fi
+    # --all adds the Flatpak applications to the same nobara-sync run, so
+    # run it once when both of its entries are enabled.
+    if has_tool nobara-sync && has_tool nobara-sync-flatpak; then
+        steps=$(drop_tools "$steps" "nobara-sync nobara-sync-flatpak")
+        nobara-sync cli --all || rc=1
     fi
     for id in $steps; do
         update_tool "$id" || rc=1

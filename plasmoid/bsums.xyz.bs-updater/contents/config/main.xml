@@ -53,6 +53,13 @@
             <label>Update RPM packages and Nobara fixups with nobara-sync</label>
             <default>false</default>
         </entry>
+        <!-- nobara-sync updates Flatpak applications as well, with its
+             --all option, so it has a second entry here. It has no
+             Flatpak-only mode, so this one needs toolNobaraSync too. -->
+        <entry name="toolNobaraSyncFlatpak" type="Bool">
+            <label>Update Flatpak applications with nobara-sync</label>
+            <default>false</default>
+        </entry>
         <!-- The Debian tool is off by default for the same reason: a
              Debian or Ubuntu user turns it on here and the others off. -->
         <entry name="toolApt" type="Bool">

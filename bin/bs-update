@@ -11,6 +11,11 @@
 #                               only show the up-to-date notification
 #   bs-update --tools LIST     use this comma or space separated list of tools
 #                               for this run instead of the configured one
+#   bs-update --interaction LEVEL
+#                               confirm, auto, or silent, for this run instead
+#                               of the configured level
+#   bs-update --start          install the updates the way the interaction
+#                               level says: in a terminal, or in the background
 #   bs-update --list-tools     show every supported tool and whether it is enabled
 #   bs-update --in-terminal    run bs-update in a new terminal window
 #   bs-update -h, --help       show this help text
@@ -21,6 +26,16 @@
 # pacman are enabled, because paru already updates repository packages.
 # On Fedora enable dnf, on Nobara enable nobara-sync, and on Debian or
 # Ubuntu enable apt, in the widget settings or in that file.
+#
+# The interaction level says how an update run asks its questions:
+#   confirm  every tool asks before it installs. This is the default.
+#   auto     every tool that has an option for it installs without a
+#            question. nobara-sync has no such option and still asks.
+#   silent   the same, and the tray widget starts the run in the background
+#            instead of a terminal. A tool that needs the root password gets
+#            it from a graphical dialog, because there is no terminal to ask
+#            in. The result comes as a notification.
+# The tray widget writes the level to the configuration file as well.
 #
 # The notification is clickable. A click runs bs-update in a terminal window.
 
@@ -64,6 +79,14 @@ appimage|AppImage|AppImages'
 # and Debian tools stay off as well: this default is for Arch, and Fedora,
 # Nobara, Debian and Ubuntu users pick their tool in the widget settings.
 DEFAULT_TOOLS='paru-repo paru-aur flatpak gearlever'
+
+# The tools that can install updates without a confirmation question, and
+# the option that does it. nobara-sync is absent: it has no documented
+# option for that, so it asks even at the auto and silent levels.
+UNATTENDED_CAPABLE='pacman paru-repo paru-aur dnf apt flatpak gearlever'
+
+# Used when the configuration file does not name a level.
+DEFAULT_INTERACTION=confirm
 
 warn() {
     echo "bs-update: $*" >&2
@@ -118,6 +141,17 @@ read_config_tools() {
         esac
     done < "$CONFIG_FILE"
     printf '%s' "${selected# }"
+}
+
+# Read the interaction level from the file the widget writes. Its line
+# looks like "interaction=auto". An unknown level falls back to confirm,
+# which asks before it installs anything.
+read_config_interaction() {
+    level=
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in 'interaction='*) level=${line#interaction=} ;; esac
+    done < "$CONFIG_FILE"
+    printf '%s' "$level"
 }
 
 # Sanity check a list of tools. Drops names this version does not know,
@@ -194,25 +228,76 @@ count_tool() {
     esac
 }
 
-# Install the updates one tool has available.
+# A program that asks for the root password in a window. A silent run has
+# no terminal to ask in, so sudo needs one of these.
+find_askpass() {
+    for candidate in \
+        /usr/bin/ksshaskpass \
+        /usr/lib/ssh/ssh-askpass \
+        /usr/libexec/openssh/gnome-ssh-askpass \
+        /usr/bin/lxqt-openssh-askpass \
+        /usr/bin/x11-ssh-askpass
+    do
+        [ -x "$candidate" ] && { printf '%s' "$candidate"; return 0; }
+    done
+    return 1
+}
+
+# How the tools that need root ask for the password. A terminal run uses
+# plain sudo, which asks in the terminal. A silent run has no terminal, so
+# sudo reads the password from a window with "-A" instead.
+#
+# paru is not run through sudo: it refuses to run as root and calls sudo
+# itself, so it gets the same option through --sudoflags.
+SUDO="sudo"
+PARU_SUDO=""
+
+use_graphical_password() {
+    askpass=$(find_askpass) || return 1
+    SUDO_ASKPASS=$askpass
+    export SUDO_ASKPASS
+    SUDO="sudo -A"
+    PARU_SUDO="--sudoflags -A"
+}
+
+# Install the updates one tool has available. At the auto and silent
+# levels each tool that has an option to skip its confirmation question
+# gets that option; $yes holds it, and is empty at the confirm level.
 update_tool() {
+    yes=
+    case " $UNATTENDED_CAPABLE " in
+    *" $1 "*) [ "$INTERACTION" = confirm ] || yes=yes ;;
+    esac
     case "$1" in
-    pacman)    sudo pacman -Syu ;;
-    paru-repo) paru -Syu --repo ;;
-    paru-aur)  paru -Sua ;;
-    dnf)       sudo dnf upgrade ;;
+    pacman)    $SUDO pacman -Syu ${yes:+--noconfirm} ;;
+    paru-repo) paru $PARU_SUDO -Syu --repo ${yes:+--noconfirm} ;;
+    # --skipreview goes with --noconfirm: a paused PKGBUILD review would
+    # wait for a keypress that an unattended run has nobody to give.
+    paru-aur)  paru $PARU_SUDO -Sua ${yes:+--noconfirm --skipreview} ;;
+    dnf)       $SUDO dnf upgrade ${yes:+-y} ;;
     # nobara-sync raises its own privileges with sudo or pkexec, so it is
     # not run through sudo here. "cli" installs the system updates and the
     # Nobara fixups; it leaves Flatpaks alone unless given --all, so the
     # flatpak tool stays in charge of those.
+    # It has no documented option to skip its questions, so it asks at
+    # every level.
     nobara-sync) nobara-sync cli ;;
     # "apt-get update" refreshes the package lists, which apt-get upgrade
     # needs to see anything new; unlike pacman -Syu and dnf upgrade it does
     # not do that itself. "upgrade" never removes a package, so a package
     # whose update needs one is kept back and left for the user; count_deb
     # leaves it out of the count for the same reason.
-    apt)       sudo apt-get update && sudo apt-get upgrade ;;
-    flatpak)   flatpak update ;;
+    # DEBIAN_FRONTEND=noninteractive answers the questions dpkg asks about
+    # a changed configuration file. It keeps the file that is on disk.
+    apt)
+        if [ -n "$yes" ]; then
+            $SUDO apt-get update \
+            && $SUDO env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+        else
+            $SUDO apt-get update && $SUDO apt-get upgrade
+        fi
+        ;;
+    flatpak)   flatpak update ${yes:+-y} ;;
     gearlever) $GEARLEVER --update --all --yes ;;
     esac
 }
@@ -237,7 +322,9 @@ do_update() {
     # it once when both of its entries are enabled.
     if has_tool paru-repo && has_tool paru-aur; then
         steps=$(drop_tools "$steps" "paru-repo paru-aur")
-        paru -Syu || rc=1
+        yes=
+        [ "$INTERACTION" = confirm ] || yes=yes
+        paru $PARU_SUDO -Syu ${yes:+--noconfirm --skipreview} || rc=1
     fi
     for id in $steps; do
         update_tool "$id" || rc=1
@@ -253,7 +340,37 @@ open_in_terminal() {
     term=$(kreadconfig6 --file kdeglobals --group General --key TerminalApplication 2>/dev/null)
     [ -n "$term" ] || term="${TERMINAL:-}"
     [ -n "$term" ] || term=konsole
-    $term -e sh -c "'$SELF'$tools_arg; printf '\nFinished. Press Enter to close.'; read line"
+    $term -e sh -c "'$SELF'$tools_arg$interaction_arg; printf '\nFinished. Press Enter to close.'; read line"
+}
+
+# Install the updates without a terminal, and report the result in a
+# notification. The output goes to a file, so a failed run can be read
+# afterwards.
+do_silent() {
+    mkdir -p "$STATE_DIR"
+    log="$STATE_DIR/last-run.log"
+    if ! use_graphical_password; then
+        warn "no graphical password program found; a tool that needs the root password cannot ask for it"
+    fi
+    notify-send -a "bs-updater" -i view-refresh -t 4000 \
+        "bs-updater" "Installing updates in the background…" >/dev/null 2>&1 &
+    if do_update > "$log" 2>&1; then
+        notify-send -a "bs-updater" -i update-none -t 5000 \
+            "Updates installed" "The system is up to date." >/dev/null 2>&1 &
+    else
+        notify-send -a "bs-updater" -i dialog-error -t 0 \
+            "The update failed" "Read $log, or run bs-update in a terminal." \
+            >/dev/null 2>&1 &
+    fi
+}
+
+# Install the updates the way the interaction level says. The tray widget
+# calls this, so the level decides between a terminal and a silent run.
+do_start() {
+    case "$INTERACTION" in
+    silent) do_silent ;;
+    *)      open_in_terminal ;;
+    esac
 }
 
 show_notification() {
@@ -307,20 +424,29 @@ do_list_tools() {
     printf '%s\n' "$TOOLS" | while IFS='|' read -r id domain name; do
         state="off"
         case " $ENABLED " in *" $id "*) state="on" ;; esac
-        printf '%-12s %-3s %s: %s\n' "$id" "$state" "$name" "$(domain_name "$domain")"
+        asks="asks"
+        case " $UNATTENDED_CAPABLE " in
+        *" $id "*) [ "$INTERACTION" = confirm ] || asks="unattended" ;;
+        esac
+        printf '%-12s %-3s %-10s %s: %s\n' \
+            "$id" "$state" "$asks" "$name" "$(domain_name "$domain")"
     done
+    printf 'interaction level: %s\n' "$INTERACTION"
 }
 
 mode=update
 notify=
 tools=
 tools_arg=
+interaction=
+interaction_arg=
 
 while [ $# -gt 0 ]; do
     case "$1" in
     -l|--list)     mode=list ;;
     --list-tools)  mode=list-tools ;;
     --in-terminal) mode=terminal ;;
+    --start)       mode=start ;;
     --notify|--notify-always|--notify-uptodate) notify=$1 ;;
     --tools)
         shift
@@ -328,6 +454,12 @@ while [ $# -gt 0 ]; do
         tools=$1
         ;;
     --tools=*)     tools=${1#--tools=} ;;
+    --interaction)
+        shift
+        [ $# -gt 0 ] || { warn "--interaction needs a level"; exit 1; }
+        interaction=$1
+        ;;
+    --interaction=*) interaction=${1#--interaction=} ;;
     -h|--help)     usage; exit 0 ;;
     "")            ;;
     *)             usage >&2; exit 1 ;;
@@ -346,6 +478,23 @@ else
     tools=$DEFAULT_TOOLS
 fi
 
+# An explicit level wins over the configured one.
+if [ -z "$interaction" ] && [ -r "$CONFIG_FILE" ]; then
+    interaction=$(read_config_interaction)
+fi
+case "$interaction" in
+confirm|auto|silent) ;;
+'') interaction=$DEFAULT_INTERACTION ;;
+*)
+    warn "unknown interaction level '$interaction'; asking before each install"
+    interaction=confirm
+    ;;
+esac
+INTERACTION=$interaction
+# Pass the level on to the run started from the terminal or the
+# notification, so every run of one click behaves the same way.
+interaction_arg=" --interaction $INTERACTION"
+
 ENABLED=$(resolve_tools "$(printf '%s' "$tools" | tr ',' ' ')")
 
 case "$mode" in
@@ -353,4 +502,5 @@ update)     do_update ;;
 list)       do_list "$notify" ;;
 list-tools) do_list_tools ;;
 terminal)   open_in_terminal ;;
+start)      do_start ;;
 esac

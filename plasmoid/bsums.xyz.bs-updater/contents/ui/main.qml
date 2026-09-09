@@ -51,7 +51,16 @@ PlasmoidItem {
         "nobara-sync=" + (Plasmoid.configuration.toolNobaraSync ? "on" : "off") + "\n" +
         "apt=" + (Plasmoid.configuration.toolApt ? "on" : "off") + "\n" +
         "flatpak=" + (Plasmoid.configuration.toolFlatpak ? "on" : "off") + "\n" +
-        "gearlever=" + (Plasmoid.configuration.toolGearLever ? "on" : "off") + "\n"
+        "gearlever=" + (Plasmoid.configuration.toolGearLever ? "on" : "off") + "\n" +
+        "interaction=" + interactionName + "\n"
+
+    // 0 ask before each source installs, 1 install without a question,
+    // 2 install in the background without a question. bin/bs-update knows
+    // these three names.
+    readonly property string interactionName:
+        Plasmoid.configuration.interactionLevel === 2 ? "silent"
+      : Plasmoid.configuration.interactionLevel === 1 ? "auto"
+      : "confirm"
 
     readonly property string toolsConfigPath:
         "${XDG_CONFIG_HOME:-$HOME/.config}/bs-updater/tools.conf"
@@ -162,8 +171,10 @@ PlasmoidItem {
         exec.connectSource("$HOME/.local/bin/bs-update -l " + flag)
     }
 
+    // --start reads the interaction level and chooses a terminal run or a
+    // background run itself, so both come from one place.
     function runUpdateNow() {
-        exec.connectSource("$HOME/.local/bin/bs-update --in-terminal")
+        exec.connectSource("$HOME/.local/bin/bs-update --start")
     }
 
     Timer {

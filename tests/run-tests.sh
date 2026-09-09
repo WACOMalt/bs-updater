@@ -354,14 +354,15 @@ gearlever=on
 EOF
 run --list-tools
 check "--list-tools shows every tool and its state" \
-    "pacman       off pacman: repository packages
-paru-repo    on  paru (repository packages): repository packages
-paru-aur     on  paru (AUR packages): AUR packages
-dnf          off DNF: RPM packages
-nobara-sync  off nobara-sync: RPM packages
-apt          off APT: Debian packages
-flatpak      on  Flatpak: Flatpak applications and runtimes
-gearlever    on  Gear Lever: AppImages" "$out"
+    "pacman       off asks       pacman: repository packages
+paru-repo    on  asks       paru (repository packages): repository packages
+paru-aur     on  asks       paru (AUR packages): AUR packages
+dnf          off asks       DNF: RPM packages
+nobara-sync  off asks       nobara-sync: RPM packages
+apt          off asks       APT: Debian packages
+flatpak      on  asks       Flatpak: Flatpak applications and runtimes
+gearlever    on  asks       Gear Lever: AppImages
+interaction level: confirm" "$out"
 
 echo
 echo "# Fedora and Nobara"
@@ -550,6 +551,82 @@ flatpak update
 flatpak run it.mijorus.gearlever --update --all --yes" "$(cat "$WORK/log")"
 check "a failed run writes no state file, so the widget keeps its icon" \
     "no" "$([ -f "$XDG_CACHE_HOME/bs-updater/last-update" ] && echo yes || echo no)"
+
+echo
+echo "# The interaction level"
+clear_config
+
+run -l --list-tools
+contains "the level is confirm without a configuration file" \
+    "interaction level: confirm" "$out"
+
+run
+check "confirm asks before each install" \
+    "paru -Syu
+flatpak update
+flatpak run it.mijorus.gearlever --update --all --yes" "$(cat "$WORK/log")"
+
+run --interaction auto
+check "auto adds the option that skips the question" \
+    "paru -Syu --noconfirm --skipreview
+flatpak update -y
+flatpak run it.mijorus.gearlever --update --all --yes" "$(cat "$WORK/log")"
+
+# A run in a terminal asks for the root password in that terminal, at
+# every level. The graphical password dialog is only for a run with no
+# terminal, which --start begins.
+run --interaction silent
+check "silent in a terminal installs without a question" \
+    "paru -Syu --noconfirm --skipreview
+flatpak update -y
+flatpak run it.mijorus.gearlever --update --all --yes" "$(cat "$WORK/log")"
+
+run --interaction silent --start
+contains "silent --start asks for the password in a window" \
+    "paru --sudoflags -A -Syu" "$(cat "$WORK/log")"
+contains "silent --start reports the result" \
+    "notify-send" "$(cat "$WORK/log")"
+
+run --interaction auto --start
+lacks "auto --start opens a terminal instead of running in the background" \
+    "--sudoflags" "$(cat "$WORK/log")"
+
+run --tools pacman --interaction auto
+check "pacman gets --noconfirm" "sudo pacman -Syu --noconfirm
+pacman -Syu --noconfirm" "$(cat "$WORK/log")"
+
+run --tools dnf --interaction auto
+check "dnf gets -y" "sudo dnf upgrade -y
+dnf upgrade -y" "$(cat "$WORK/log")"
+
+run --tools apt --interaction auto
+contains "apt answers the configuration file questions" \
+    "DEBIAN_FRONTEND=noninteractive" "$(cat "$WORK/log")"
+
+run --tools nobara-sync --interaction auto
+check "nobara-sync still asks, it has no option for this" \
+    "nobara-sync cli" "$(cat "$WORK/log")"
+
+run --interaction bogus --list-tools
+contains "an unknown level warns" "unknown interaction level" "$err"
+contains "an unknown level falls back to confirm" \
+    "interaction level: confirm" "$out"
+
+set_config <<'EOF'
+paru-aur=on
+interaction=auto
+EOF
+run --list-tools
+contains "the configuration file sets the level" \
+    "interaction level: auto" "$out"
+run
+check "the configured level reaches the install" \
+    "paru -Sua --noconfirm --skipreview" "$(cat "$WORK/log")"
+
+run --interaction confirm
+check "an explicit level wins over the configured one" \
+    "paru -Sua" "$(cat "$WORK/log")"
+clear_config
 
 echo
 echo "# Help"

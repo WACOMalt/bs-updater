@@ -81,7 +81,56 @@ Two details follow from this:
 - `bs-update -l`: shows the number of available updates for each enabled source. It does not install them.
 - `bs-update --list-tools`: shows every supported tool and whether it is enabled.
 - `bs-update --tools LIST`: uses this comma or space separated list of tools for one run, instead of the enabled ones. For example: `bs-update --tools flatpak,gearlever`.
+- `bs-update --interaction LEVEL`: uses `confirm`, `auto`, or `silent` for one run, instead of the configured level. See [Interaction level](#interaction-level).
 - The tray widget: shows the update status in the KDE Plasma system tray. It uses `bs-update` for all checks and updates.
+
+## Interaction level
+
+The interaction level says how an update run asks its questions. Set it in the
+widget settings, on the "General" page, under "When you start an update".
+
+| Level | Terminal | Questions |
+| --- | --- | --- |
+| `confirm` | yes | Each source asks before it installs. This is the default. |
+| `auto` | yes | Each source that has an option for it installs without a question. |
+| `silent` | no | The same, and the run happens in the background. |
+
+At the `silent` level the widget starts the run with no terminal, and a
+notification reports the result. The output goes to
+`~/.cache/bs-updater/last-run.log`.
+
+A source that needs the root password then has no terminal to ask in, so
+`bs-update` makes `sudo` ask for it in a window instead. It uses the first of
+these programs that is installed: `ksshaskpass`, `ssh-askpass`,
+`gnome-ssh-askpass`, `lxqt-openssh-askpass`, or `x11-ssh-askpass`. KDE Plasma
+supplies `ksshaskpass`. Without one of them, a source that needs the root
+password cannot install anything, and `bs-update` says so.
+
+paru is not run through `sudo`, because paru refuses to run as root and calls
+`sudo` itself. It gets the same option through `--sudoflags`.
+
+Two points to know before you leave a run unattended:
+
+- `nobara-sync` has no documented option to install without a question, so it
+  asks at every level.
+- A source that installs without a question also answers for you when an
+  update replaces or removes a package. Read
+  `~/.cache/bs-updater/last-run.log` if an update matters to you.
+
+These are the options each source gets at the `auto` and `silent` levels:
+
+| Source | Option |
+| --- | --- |
+| `pacman` | `--noconfirm` |
+| `paru` | `--noconfirm --skipreview` |
+| `dnf` | `-y` |
+| `apt` | `-y`, with `DEBIAN_FRONTEND=noninteractive` for the questions about a changed configuration file |
+| `flatpak` | `-y` |
+| `Gear Lever` | `--yes`, which it always gets |
+| `nobara-sync` | none |
+
+A run you start in a terminal yourself always asks for the root password in
+that terminal, at every level.
 
 ## How the tray widget operates
 
@@ -157,6 +206,8 @@ The settings on the "General" page are:
 - The check interval, in hours.
 - Show a notification when updates are available. Default: on.
 - Show a notification when a manual check finds no updates. Default: on.
+- The interaction level. Default: show a terminal and ask before each source
+  installs. See [Interaction level](#interaction-level).
 
 The "Update sources" page has one checkbox per supported tool. Uncheck a tool
 to leave its packages alone: bs-updater then neither counts nor installs them.
@@ -175,6 +226,7 @@ nobara-sync=off
 apt=off
 flatpak=on
 gearlever=on
+interaction=confirm
 ```
 
 Without the file, the Arch tools except `pacman` are enabled, along with

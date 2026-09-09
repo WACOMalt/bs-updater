@@ -77,10 +77,15 @@ KCM.SimpleKCM {
     }
 
     ColumnLayout {
+        // The page does not bind the width of its content, so wrapping text
+        // has to be held to the width of the page itself. Without this the
+        // text keeps its one-line width and runs past the right edge.
+        width: root.width
         spacing: Kirigami.Units.largeSpacing
 
         Kirigami.InlineMessage {
             Layout.fillWidth: true
+            Layout.maximumWidth: root.width - Kirigami.Units.gridUnit
             type: Kirigami.MessageType.Warning
             text: root.warning
             visible: root.warning.length > 0
@@ -148,6 +153,7 @@ KCM.SimpleKCM {
 
         QQC2.Label {
             Layout.fillWidth: true
+            Layout.maximumWidth: root.width - Kirigami.Units.gridUnit
             wrapMode: Text.Wrap
             opacity: 0.7
             text: i18n("An unchecked source is neither checked for updates nor updated. The tool of a checked source has to be installed. The defaults suit Arch: on Fedora check dnf, on Nobara check nobara-sync, on Debian or Ubuntu check apt, and uncheck the Arch sources.")

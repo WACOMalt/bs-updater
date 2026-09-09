@@ -1,16 +1,41 @@
 #!/bin/sh
-# bs-updater: update all software sources on an Arch Linux system.
+# bs-updater: update all software sources on a Linux system.
 #
 # Usage:
-#   bs-update                  update pacman, AUR, Flatpak, and AppImage software
+#   bs-update                  update every enabled source
 #   bs-update -l, --list       show the number of available updates per source
 #   bs-update -l --notify      also show a notification if updates are available
 #   bs-update -l --notify-always
 #                               also show a notification when the system is up to date
 #   bs-update -l --notify-uptodate
 #                               only show the up-to-date notification
+#   bs-update --tools LIST     use this comma or space separated list of tools
+#                               for this run instead of the configured one
+#   bs-update --interaction LEVEL
+#                               confirm, auto, or silent, for this run instead
+#                               of the configured level
+#   bs-update --start          install the updates the way the interaction
+#                               level says: in a terminal, or in the background
+#   bs-update --list-tools     show every supported tool and whether it is enabled
 #   bs-update --in-terminal    run bs-update in a new terminal window
 #   bs-update -h, --help       show this help text
+#
+# The supported tools are pacman, paru-repo, paru-aur, dnf, nobara-sync,
+# apt, flatpak, and gearlever. The tray widget writes the enabled ones to
+# ~/.config/bs-updater/tools.conf. Without that file the Arch tools except
+# pacman are enabled, because paru already updates repository packages.
+# On Fedora enable dnf, on Nobara enable nobara-sync, and on Debian or
+# Ubuntu enable apt, in the widget settings or in that file.
+#
+# The interaction level says how an update run asks its questions:
+#   confirm  every tool asks before it installs. This is the default.
+#   auto     every tool that has an option for it installs without a
+#            question. nobara-sync has no such option and still asks.
+#   silent   the same, and the tray widget starts the run in the background
+#            instead of a terminal. A tool that needs the root password gets
+#            it from a graphical dialog, because there is no terminal to ask
+#            in. The result comes as a notification.
+# The tray widget writes the level to the configuration file as well.
 #
 # The notification is clickable. A click runs bs-update in a terminal window.
 
@@ -20,14 +45,261 @@
 GEARLEVER="env -u DISPLAY -u WAYLAND_DISPLAY flatpak run it.mijorus.gearlever"
 SELF=$(readlink -f "$0" 2>/dev/null || echo "$0")
 
-usage() {
-    sed -n '2,15p' "$SELF" | sed 's/^# \{0,1\}//'
+# The tray widget writes this file whenever its settings change.
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/bs-updater/tools.conf"
+
+# Every tool bs-update can drive, in the order it runs them. One line each:
+#   id|package domain|name shown to the user
+# paru appears twice because it updates two kinds of package. Tools that
+# share a domain update the same packages, so only one of them may run;
+# see resolve_tools.
+TOOLS='pacman|repo|pacman
+paru-repo|repo|paru (repository packages)
+paru-aur|aur|paru (AUR packages)
+dnf|rpm|DNF
+nobara-sync|rpm|nobara-sync
+apt|deb|APT
+flatpak|flatpak|Flatpak
+gearlever|appimage|Gear Lever'
+
+# The kinds of package a tool can cover. One line each:
+#   id|heading used in the list output|name shown to the user
+# Arch repository packages, RPM packages and Debian packages are separate
+# domains: a system has one of them, and a tool for one says nothing about
+# the others.
+DOMAINS='repo|Pacman|repository packages
+aur|AUR|AUR packages
+rpm|RPM|RPM packages
+deb|APT|Debian packages
+flatpak|Flatpak|Flatpak applications and runtimes
+appimage|AppImage|AppImages'
+
+# Used when the configuration file does not exist. paru covers repository
+# packages, so plain pacman stays off and the two do not conflict. The RPM
+# and Debian tools stay off as well: this default is for Arch, and Fedora,
+# Nobara, Debian and Ubuntu users pick their tool in the widget settings.
+DEFAULT_TOOLS='paru-repo paru-aur flatpak gearlever'
+
+# The tools that can install updates without a confirmation question, and
+# the option that does it. nobara-sync is absent: it has no documented
+# option for that, so it asks even at the auto and silent levels.
+UNATTENDED_CAPABLE='pacman paru-repo paru-aur dnf apt flatpak gearlever'
+
+# Used when the configuration file does not name a level.
+DEFAULT_INTERACTION=confirm
+
+warn() {
+    echo "bs-update: $*" >&2
 }
 
-# --all checks each integrated AppImage and downloads only those with a
-# newer version available. --yes skips the interactive question.
-update_appimages() {
-    $GEARLEVER --update --all --yes
+usage() {
+    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$SELF"
+}
+
+# field <table> <id> <column>: print one column of the table row for <id>,
+# or nothing when the table has no such row.
+field() {
+    printf '%s\n' "$1" | while IFS='|' read -r c1 c2 c3; do
+        [ "$c1" = "$2" ] || continue
+        case "$3" in
+        2) printf '%s' "$c2" ;;
+        3) printf '%s' "$c3" ;;
+        esac
+        break
+    done
+}
+
+tool_domain()    { field "$TOOLS" "$1" 2; }
+tool_name()      { field "$TOOLS" "$1" 3; }
+domain_heading() { field "$DOMAINS" "$1" 2; }
+domain_name()    { field "$DOMAINS" "$1" 3; }
+
+has_tool() {
+    case " $ENABLED " in *" $1 "*) return 0 ;; esac
+    return 1
+}
+
+# drop_tools <list> <ids to remove>: print <list> without those ids.
+drop_tools() {
+    kept=
+    for drop_id in $1; do
+        case " $2 " in *" $drop_id "*) continue ;; esac
+        kept="$kept $drop_id"
+    done
+    printf '%s' "${kept# }"
+}
+
+# Read the enabled tools from the file the widget writes. Its lines look
+# like "flatpak=on". Any value other than on, true, 1, or yes disables the
+# tool. An existing file with nothing enabled stays empty on purpose.
+read_config_tools() {
+    selected=
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in ''|'#'*) continue ;; esac
+        case "${line#*=}" in
+        on|true|1|yes) selected="$selected ${line%%=*}" ;;
+        esac
+    done < "$CONFIG_FILE"
+    printf '%s' "${selected# }"
+}
+
+# Read the interaction level from the file the widget writes. Its line
+# looks like "interaction=auto". An unknown level falls back to confirm,
+# which asks before it installs anything.
+read_config_interaction() {
+    level=
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in 'interaction='*) level=${line#interaction=} ;; esac
+    done < "$CONFIG_FILE"
+    printf '%s' "$level"
+}
+
+# Sanity check a list of tools. Drops names this version does not know,
+# and drops a tool when an earlier one in the list already covers the same
+# kind of package: two of them would install the same updates twice and
+# count them twice. Every drop is reported.
+resolve_tools() {
+    resolved=
+    covered=
+    for id in $1; do
+        domain=$(tool_domain "$id")
+        if [ -z "$domain" ]; then
+            warn "unknown tool '$id' - ignored"
+            continue
+        fi
+        owner=
+        for pair in $covered; do
+            case "$pair" in "$domain:"*) owner=${pair#*:} ;; esac
+        done
+        if [ -n "$owner" ]; then
+            warn "$(tool_name "$owner") and $(tool_name "$id") both update $(domain_name "$domain"); using $(tool_name "$owner")"
+            continue
+        fi
+        covered="$covered $domain:$id"
+        resolved="$resolved $id"
+    done
+    printf '%s' "${resolved# }"
+}
+
+# The number of RPM packages with an update available. dnf reports them on
+# stdout, one package per line, as "name.arch version repository". Long
+# names wrap onto a second, indented line, so only lines that start in the
+# first column count. The trailing "Obsoleting Packages" section repeats
+# packages that are already listed above, so counting stops there. Works
+# with both dnf 4 and dnf 5, and needs no root.
+count_rpm() {
+    dnf -q check-update 2>/dev/null | awk '
+        /^Obsoleting Packages/ { exit }
+        /^[^[:space:]]/ && $1 ~ /\./ { n++ }
+        END { print n + 0 }'
+}
+
+# The number of Debian packages with an update available. "apt-get -s
+# upgrade" simulates the upgrade and prints one "Inst name ..." line per
+# package it would install, which is exactly what the apt tool installs
+# below. It needs no root, unlike "apt-get update", so a scheduled check
+# from the tray widget can run it. apt-get has a stable command line
+# interface; the apt command warns that its own is not meant for scripts.
+#
+# The count comes from the package lists on disk. Debian and Ubuntu
+# refresh those in the background with the apt-daily timer, so a system
+# with that timer running counts what its last refresh found.
+count_deb() {
+    apt-get -q -s upgrade 2>/dev/null | awk '
+        /^Inst / { n++ }
+        END { print n + 0 }'
+}
+
+# The number of updates one tool has available.
+count_tool() {
+    case "$1" in
+    pacman|paru-repo) checkupdates 2>/dev/null | grep -c . ;;
+    paru-aur)         paru -Qua 2>/dev/null | grep -c . ;;
+    # nobara-sync installs its system updates with dnf, so dnf counts them.
+    # Its own check-updates command would ask for the root password, which
+    # a scheduled check from the tray widget cannot answer.
+    dnf|nobara-sync)  count_rpm ;;
+    apt)              count_deb ;;
+    flatpak)          flatpak remote-ls --updates 2>/dev/null | grep -c . ;;
+    # --all checks each integrated AppImage and downloads only those with
+    # a newer version available. --yes skips the interactive question.
+    gearlever)        $GEARLEVER --list-updates 2>/dev/null \
+                      | grep -v '^No updates available' | grep -c . ;;
+    esac
+}
+
+# A program that asks for the root password in a window. A silent run has
+# no terminal to ask in, so sudo needs one of these.
+find_askpass() {
+    for candidate in \
+        /usr/bin/ksshaskpass \
+        /usr/lib/ssh/ssh-askpass \
+        /usr/libexec/openssh/gnome-ssh-askpass \
+        /usr/bin/lxqt-openssh-askpass \
+        /usr/bin/x11-ssh-askpass
+    do
+        [ -x "$candidate" ] && { printf '%s' "$candidate"; return 0; }
+    done
+    return 1
+}
+
+# How the tools that need root ask for the password. A terminal run uses
+# plain sudo, which asks in the terminal. A silent run has no terminal, so
+# sudo reads the password from a window with "-A" instead.
+#
+# paru is not run through sudo: it refuses to run as root and calls sudo
+# itself, so it gets the same option through --sudoflags.
+SUDO="sudo"
+PARU_SUDO=""
+
+use_graphical_password() {
+    askpass=$(find_askpass) || return 1
+    SUDO_ASKPASS=$askpass
+    export SUDO_ASKPASS
+    SUDO="sudo -A"
+    PARU_SUDO="--sudoflags -A"
+}
+
+# Install the updates one tool has available. At the auto and silent
+# levels each tool that has an option to skip its confirmation question
+# gets that option; $yes holds it, and is empty at the confirm level.
+update_tool() {
+    yes=
+    case " $UNATTENDED_CAPABLE " in
+    *" $1 "*) [ "$INTERACTION" = confirm ] || yes=yes ;;
+    esac
+    case "$1" in
+    pacman)    $SUDO pacman -Syu ${yes:+--noconfirm} ;;
+    paru-repo) paru $PARU_SUDO -Syu --repo ${yes:+--noconfirm} ;;
+    # --skipreview goes with --noconfirm: a paused PKGBUILD review would
+    # wait for a keypress that an unattended run has nobody to give.
+    paru-aur)  paru $PARU_SUDO -Sua ${yes:+--noconfirm --skipreview} ;;
+    dnf)       $SUDO dnf upgrade ${yes:+-y} ;;
+    # nobara-sync raises its own privileges with sudo or pkexec, so it is
+    # not run through sudo here. "cli" installs the system updates and the
+    # Nobara fixups; it leaves Flatpaks alone unless given --all, so the
+    # flatpak tool stays in charge of those.
+    # It has no documented option to skip its questions, so it asks at
+    # every level.
+    nobara-sync) nobara-sync cli ;;
+    # "apt-get update" refreshes the package lists, which apt-get upgrade
+    # needs to see anything new; unlike pacman -Syu and dnf upgrade it does
+    # not do that itself. "upgrade" never removes a package, so a package
+    # whose update needs one is kept back and left for the user; count_deb
+    # leaves it out of the count for the same reason.
+    # DEBIAN_FRONTEND=noninteractive answers the questions dpkg asks about
+    # a changed configuration file. It keeps the file that is on disk.
+    apt)
+        if [ -n "$yes" ]; then
+            $SUDO apt-get update \
+            && $SUDO env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+        else
+            $SUDO apt-get update && $SUDO apt-get upgrade
+        fi
+        ;;
+    flatpak)   flatpak update ${yes:+-y} ;;
+    gearlever) $GEARLEVER --update --all --yes ;;
+    esac
 }
 
 # The widget watches this file. A new timestamp tells the widget that an
@@ -40,7 +312,25 @@ mark_updated() {
 }
 
 do_update() {
-    paru -Syu && flatpak update && update_appimages && mark_updated
+    if [ -z "$ENABLED" ]; then
+        warn "no update tools are enabled; nothing to update"
+        return 1
+    fi
+    steps=$ENABLED
+    rc=0
+    # paru updates repository and AUR packages in one transaction, so run
+    # it once when both of its entries are enabled.
+    if has_tool paru-repo && has_tool paru-aur; then
+        steps=$(drop_tools "$steps" "paru-repo paru-aur")
+        yes=
+        [ "$INTERACTION" = confirm ] || yes=yes
+        paru $PARU_SUDO -Syu ${yes:+--noconfirm --skipreview} || rc=1
+    fi
+    for id in $steps; do
+        update_tool "$id" || rc=1
+    done
+    [ "$rc" -eq 0 ] || return 1
+    mark_updated
 }
 
 # Open the user's terminal application and run bs-update inside it.
@@ -50,7 +340,37 @@ open_in_terminal() {
     term=$(kreadconfig6 --file kdeglobals --group General --key TerminalApplication 2>/dev/null)
     [ -n "$term" ] || term="${TERMINAL:-}"
     [ -n "$term" ] || term=konsole
-    $term -e sh -c "'$SELF'; printf '\nFinished. Press Enter to close.'; read line"
+    $term -e sh -c "'$SELF'$tools_arg$interaction_arg; printf '\nFinished. Press Enter to close.'; read line"
+}
+
+# Install the updates without a terminal, and report the result in a
+# notification. The output goes to a file, so a failed run can be read
+# afterwards.
+do_silent() {
+    mkdir -p "$STATE_DIR"
+    log="$STATE_DIR/last-run.log"
+    if ! use_graphical_password; then
+        warn "no graphical password program found; a tool that needs the root password cannot ask for it"
+    fi
+    notify-send -a "bs-updater" -i view-refresh -t 4000 \
+        "bs-updater" "Installing updates in the background…" >/dev/null 2>&1 &
+    if do_update > "$log" 2>&1; then
+        notify-send -a "bs-updater" -i update-none -t 5000 \
+            "Updates installed" "The system is up to date." >/dev/null 2>&1 &
+    else
+        notify-send -a "bs-updater" -i dialog-error -t 0 \
+            "The update failed" "Read $log, or run bs-update in a terminal." \
+            >/dev/null 2>&1 &
+    fi
+}
+
+# Install the updates the way the interaction level says. The tray widget
+# calls this, so the level decides between a terminal and a silent run.
+do_start() {
+    case "$INTERACTION" in
+    silent) do_silent ;;
+    *)      open_in_terminal ;;
+    esac
 }
 
 show_notification() {
@@ -61,7 +381,7 @@ show_notification() {
             choice=$(notify-send -a "bs-updater" -i update-high -t 0 \
                 -A default="Update now" \
                 "$total updates available" \
-                "Pacman $repo | AUR $aur | Flatpak $fp | AppImage $ai — click to update system")
+                "$summary — click to update system")
             if [ -n "$choice" ]; then
                 open_in_terminal
             fi
@@ -77,15 +397,19 @@ show_notification() {
 }
 
 do_list() {
-    repo=$(checkupdates 2>/dev/null | grep -c .)
-    aur=$(paru -Qua 2>/dev/null | grep -c .)
-    fp=$(flatpak remote-ls --updates 2>/dev/null | grep -c .)
-    ai=$($GEARLEVER --list-updates 2>/dev/null \
-         | grep -v '^No updates available' | grep -c .)
-    total=$((repo + aur + fp + ai))
-
-    printf 'Pacman: %s\nAUR: %s\nFlatpak: %s\nAppImage: %s\nTotal: %s\n' \
-        "$repo" "$aur" "$fp" "$ai" "$total"
+    total=0
+    summary=
+    for id in $ENABLED; do
+        heading=$(domain_heading "$(tool_domain "$id")")
+        count=$(count_tool "$id")
+        case "$count" in ''|*[!0-9]*) count=0 ;; esac
+        total=$((total + count))
+        printf '%s: %s\n' "$heading" "$count"
+        summary="$summary$heading $count | "
+    done
+    summary=${summary%" | "}
+    printf 'Total: %s\n' "$total"
+    [ -n "$ENABLED" ] || warn "no update tools are enabled; nothing was checked"
 
     case "$1" in
     --notify|--notify-always|--notify-uptodate)
@@ -94,10 +418,89 @@ do_list() {
     esac
 }
 
-case "$1" in
-    "")            do_update ;;
-    -l|--list)     do_list "$2" ;;
-    --in-terminal) open_in_terminal ;;
-    -h|--help)     usage ;;
-    *)             usage; exit 1 ;;
+# Show every supported tool so the choice in the widget can be checked
+# from a terminal as well.
+do_list_tools() {
+    printf '%s\n' "$TOOLS" | while IFS='|' read -r id domain name; do
+        state="off"
+        case " $ENABLED " in *" $id "*) state="on" ;; esac
+        asks="asks"
+        case " $UNATTENDED_CAPABLE " in
+        *" $id "*) [ "$INTERACTION" = confirm ] || asks="unattended" ;;
+        esac
+        printf '%-12s %-3s %-10s %s: %s\n' \
+            "$id" "$state" "$asks" "$name" "$(domain_name "$domain")"
+    done
+    printf 'interaction level: %s\n' "$INTERACTION"
+}
+
+mode=update
+notify=
+tools=
+tools_arg=
+interaction=
+interaction_arg=
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+    -l|--list)     mode=list ;;
+    --list-tools)  mode=list-tools ;;
+    --in-terminal) mode=terminal ;;
+    --start)       mode=start ;;
+    --notify|--notify-always|--notify-uptodate) notify=$1 ;;
+    --tools)
+        shift
+        [ $# -gt 0 ] || { warn "--tools needs a list of tools"; exit 1; }
+        tools=$1
+        ;;
+    --tools=*)     tools=${1#--tools=} ;;
+    --interaction)
+        shift
+        [ $# -gt 0 ] || { warn "--interaction needs a level"; exit 1; }
+        interaction=$1
+        ;;
+    --interaction=*) interaction=${1#--interaction=} ;;
+    -h|--help)     usage; exit 0 ;;
+    "")            ;;
+    *)             usage >&2; exit 1 ;;
+    esac
+    shift
+done
+
+# An explicit choice wins over the configured one, and a configuration
+# file with everything switched off means exactly that.
+if [ -n "$tools" ]; then
+    # Pass the choice on to the run started from the notification.
+    tools_arg=" --tools '$tools'"
+elif [ -r "$CONFIG_FILE" ]; then
+    tools=$(read_config_tools)
+else
+    tools=$DEFAULT_TOOLS
+fi
+
+# An explicit level wins over the configured one.
+if [ -z "$interaction" ] && [ -r "$CONFIG_FILE" ]; then
+    interaction=$(read_config_interaction)
+fi
+case "$interaction" in
+confirm|auto|silent) ;;
+'') interaction=$DEFAULT_INTERACTION ;;
+*)
+    warn "unknown interaction level '$interaction'; asking before each install"
+    interaction=confirm
+    ;;
+esac
+INTERACTION=$interaction
+# Pass the level on to the run started from the terminal or the
+# notification, so every run of one click behaves the same way.
+interaction_arg=" --interaction $INTERACTION"
+
+ENABLED=$(resolve_tools "$(printf '%s' "$tools" | tr ',' ' ')")
+
+case "$mode" in
+update)     do_update ;;
+list)       do_list "$notify" ;;
+list-tools) do_list_tools ;;
+terminal)   open_in_terminal ;;
+start)      do_start ;;
 esac

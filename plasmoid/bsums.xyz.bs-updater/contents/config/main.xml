@@ -9,12 +9,62 @@
             <label>How often to check for updates, in hours</label>
             <default>6</default>
         </entry>
+        <!-- How an update run asks its questions:
+             0 show a terminal and ask before each source installs,
+             1 show a terminal and install without a question,
+             2 install in the background without a question. -->
+        <entry name="interactionLevel" type="Int">
+            <label>How an update run asks its questions</label>
+            <default>0</default>
+        </entry>
         <entry name="notifyUpdates" type="Bool">
             <label>Show a notification when updates are available</label>
             <default>true</default>
         </entry>
         <entry name="notifyUpToDate" type="Bool">
             <label>Show a notification when a manual check finds no updates</label>
+            <default>true</default>
+        </entry>
+        <!-- One entry per tool bs-update can drive. paru appears twice
+             because it updates two kinds of package. paru covers
+             repository packages already, so pacman stays off by default:
+             the two of them together would do the same work twice. -->
+        <entry name="toolPacman" type="Bool">
+            <label>Update repository packages with pacman</label>
+            <default>false</default>
+        </entry>
+        <entry name="toolParuRepo" type="Bool">
+            <label>Update repository packages with paru</label>
+            <default>true</default>
+        </entry>
+        <entry name="toolParuAur" type="Bool">
+            <label>Update AUR packages with paru</label>
+            <default>true</default>
+        </entry>
+        <!-- The RPM tools are off by default. These defaults describe an
+             Arch system; a Fedora or Nobara user turns their tool on here
+             and the Arch ones off. dnf and nobara-sync both update RPM
+             packages, so only one of the two may be on. -->
+        <entry name="toolDnf" type="Bool">
+            <label>Update RPM packages with dnf</label>
+            <default>false</default>
+        </entry>
+        <entry name="toolNobaraSync" type="Bool">
+            <label>Update RPM packages and Nobara fixups with nobara-sync</label>
+            <default>false</default>
+        </entry>
+        <!-- The Debian tool is off by default for the same reason: a
+             Debian or Ubuntu user turns it on here and the others off. -->
+        <entry name="toolApt" type="Bool">
+            <label>Update Debian packages with apt</label>
+            <default>false</default>
+        </entry>
+        <entry name="toolFlatpak" type="Bool">
+            <label>Update Flatpak applications and runtimes</label>
+            <default>true</default>
+        </entry>
+        <entry name="toolGearLever" type="Bool">
+            <label>Update AppImages with Gear Lever</label>
             <default>true</default>
         </entry>
     </group>

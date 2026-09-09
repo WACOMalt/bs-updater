@@ -38,6 +38,45 @@ PlasmoidItem {
     // Path of the bs-update copy that ships inside this widget package.
     readonly property string bundledScript: Qt.resolvedUrl("../code/bs-update").toString().replace("file://", "")
 
+    // The selected update sources, in the format of the tools.conf file
+    // that bs-update reads. The widget owns this choice, so it writes the
+    // file again whenever the settings change. Runs started from the
+    // notification or from a terminal then use the same sources.
+    readonly property string toolsConfig:
+        "# Written by the bs-updater widget. Change it in the widget settings.\n" +
+        "pacman=" + (Plasmoid.configuration.toolPacman ? "on" : "off") + "\n" +
+        "paru-repo=" + (Plasmoid.configuration.toolParuRepo ? "on" : "off") + "\n" +
+        "paru-aur=" + (Plasmoid.configuration.toolParuAur ? "on" : "off") + "\n" +
+        "dnf=" + (Plasmoid.configuration.toolDnf ? "on" : "off") + "\n" +
+        "nobara-sync=" + (Plasmoid.configuration.toolNobaraSync ? "on" : "off") + "\n" +
+        "apt=" + (Plasmoid.configuration.toolApt ? "on" : "off") + "\n" +
+        "flatpak=" + (Plasmoid.configuration.toolFlatpak ? "on" : "off") + "\n" +
+        "gearlever=" + (Plasmoid.configuration.toolGearLever ? "on" : "off") + "\n" +
+        "interaction=" + interactionName + "\n"
+
+    // 0 ask before each source installs, 1 install without a question,
+    // 2 install in the background without a question. bin/bs-update knows
+    // these three names.
+    readonly property string interactionName:
+        Plasmoid.configuration.interactionLevel === 2 ? "silent"
+      : Plasmoid.configuration.interactionLevel === 1 ? "auto"
+      : "confirm"
+
+    readonly property string toolsConfigPath:
+        "${XDG_CONFIG_HOME:-$HOME/.config}/bs-updater/tools.conf"
+
+    readonly property string writeToolsConfigCommand:
+        "F=\"" + toolsConfigPath + "\"; mkdir -p \"${F%/*}\"; " +
+        "printf '%s' '" + toolsConfig + "' > \"$F\""
+
+    // Publish the selected sources to bs-update. Bound to toolsConfig, so
+    // a changed setting writes the file at once.
+    onWriteToolsConfigCommandChanged: writeToolsConfig()
+
+    function writeToolsConfig() {
+        exec.connectSource(writeToolsConfigCommand)
+    }
+
     // One long-running shell process that exits when bs-update writes a new
     // timestamp to its state file after a completed update run. The widget
     // then changes to the up-to-date state at once, from any update origin:
@@ -63,24 +102,37 @@ PlasmoidItem {
             } else if (sourceName.indexOf(" -l ") !== -1) {
                 root.checking = false
                 root.parseOutput(data.stdout || "")
+            } else if (sourceName === root.writeToolsConfigCommand) {
+                // The sources changed, so the counts on screen are stale.
+                // total < 0 means the first check is still to come.
+                if (root.total >= 0) {
+                    root.runCheck(false)
+                }
             }
         }
     }
 
     // Install the bundled bs-update command if the user does not have it.
-    // This makes a widget-only installation from the KDE Store work.
+    // This makes a widget-only installation from the KDE Store work. An
+    // older copy from a previous widget version is replaced as well, so
+    // the command and the widget always agree on the settings. A file
+    // that is not a bs-update script is left alone.
     function ensureCommandInstalled() {
         exec.connectSource(
-            "BIN=\"$HOME/.local/bin/bs-update\"; " +
-            "if [ ! -x \"$BIN\" ] && [ -r '" + bundledScript + "' ]; then " +
+            "BIN=\"$HOME/.local/bin/bs-update\"; SRC='" + bundledScript + "'; " +
+            "if [ -r \"$SRC\" ] && ! cmp -s \"$SRC\" \"$BIN\"; then " +
+            "if [ ! -e \"$BIN\" ]; then " +
             "mkdir -p \"$HOME/.local/bin\"; " +
-            "cp '" + bundledScript + "' \"$BIN\"; chmod 755 \"$BIN\"; " +
+            "cp \"$SRC\" \"$BIN\"; chmod 755 \"$BIN\"; " +
             "notify-send -a bs-updater -i update-none 'bs-updater' " +
-            "'Installed the bs-update command to ~/.local/bin'; fi")
+            "'Installed the bs-update command to ~/.local/bin'; " +
+            "elif grep -q '^# bs-updater:' \"$BIN\"; then " +
+            "cp \"$SRC\" \"$BIN\"; chmod 755 \"$BIN\"; fi; fi")
     }
 
     Component.onCompleted: {
         ensureCommandInstalled()
+        writeToolsConfig()
         exec.connectSource(updateWatcher)
     }
 
@@ -119,8 +171,10 @@ PlasmoidItem {
         exec.connectSource("$HOME/.local/bin/bs-update -l " + flag)
     }
 
+    // --start reads the interaction level and chooses a terminal run or a
+    // background run itself, so both come from one place.
     function runUpdateNow() {
-        exec.connectSource("$HOME/.local/bin/bs-update --in-terminal")
+        exec.connectSource("$HOME/.local/bin/bs-update --start")
     }
 
     Timer {

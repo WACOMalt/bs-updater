@@ -99,7 +99,7 @@ PlasmoidItem {
                 // once, verify in the background, and watch again.
                 root.total = 0
                 root.runCheck(false)
-                exec.connectSource(root.updateWatcher)
+                watcherRestart.start()
             } else if (sourceName.indexOf(" -l ") !== -1) {
                 root.checking = false
                 root.parseOutput(data.stdout || "")
@@ -111,6 +111,18 @@ PlasmoidItem {
                 }
             }
         }
+    }
+
+    // Start the update watcher again after a delay. Do not reconnect it
+    // from onNewData: disconnectSource removes the finished source only
+    // later, so an immediate connectSource sends its old data again at
+    // once, onNewData runs again, and the calls recurse until the stack
+    // overflows.
+    Timer {
+        id: watcherRestart
+        interval: 1000
+        repeat: false
+        onTriggered: exec.connectSource(root.updateWatcher)
     }
 
     // Install the bundled bs-update command if the user does not have it.

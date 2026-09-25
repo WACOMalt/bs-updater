@@ -113,9 +113,10 @@ Step 5 removes these three items:
 | The applet directory | The widget package. |
 | `~/.config/bs-updater/tools.conf` | The selected tools. The widget writes it. |
 | `~/.cache/bs-updater/last-update` | The time of the last update run. |
+| `~/.cache/bs-updater/notification` | The ID of the update notification on the screen. `notification.pid` holds the process that waits for a click on it. |
 
-The two last files come into existence at the first start of the widget and
-at the first successful update run.
+The last three files come into existence at the first start of the widget,
+at the first successful update run and at the first update notification.
 
 ## 4.7 Procedure: the removal of the product
 

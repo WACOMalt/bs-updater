@@ -6,11 +6,11 @@
 ./tests/run-tests.sh
 ```
 
-The suite tests the command `bs-update`. Version 1.10.0 has 60 tests. The
+The suite tests the command `bs-update`. Version 1.12.2 has 89 tests. The
 suite writes one line for each test and a summary at the end:
 
 ```
-60 passed, 0 failed
+89 passed, 0 failed
 ```
 
 The exit code is 0 if each test passes. The exit code is 1 if one test or
@@ -28,7 +28,8 @@ The suite has stubs for these commands:
 - `dnf` and `nobara-sync`;
 - `apt-get`;
 - `flatpak`, which also answers for Gear Lever;
-- `sudo` and `notify-send`.
+- `sudo`, `notify-send` and `gdbus`;
+- `konsole`, which is the terminal.
 
 Three properties follow from this method:
 
@@ -77,7 +78,7 @@ the correct number.
 | Configuration file | The command reads the file, and `--tools` replaces the file. |
 | Fedora and Nobara | The RPM tools count with DNF and install with the correct command. |
 | Debian and Ubuntu | APT counts with a simulation and installs after a refresh. |
-| Notifications | The notification holds the count of each enabled source. |
+| Notifications | The notification holds the count of each enabled source. A new check replaces the update notification, and a check with no updates closes it. |
 | A failed tool | The run continues, gives the code 1 and writes no state file. |
 | Help | The help text is available, and an unknown option fails. |
 

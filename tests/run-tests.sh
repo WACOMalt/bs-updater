@@ -151,9 +151,24 @@ case "$1 $2" in
 esac
 EOF
 
+# notify-send prints a notification ID for -p, as the real one does. It
+# exits at once, as if the notification was closed without a click.
 cat > "$STUB_BIN/notify-send" <<'EOF'
 #!/bin/sh
 echo "notify-send $*" >> "$STUB_LOG"
+case " $* " in *" -p "*) echo "${STUB_NOTIFY_ID:-7}" ;; esac
+EOF
+
+cat > "$STUB_BIN/gdbus" <<'EOF'
+#!/bin/sh
+echo "gdbus $*" >> "$STUB_LOG"
+EOF
+
+# The terminal that a run with a terminal opens. The stub logs the call
+# and opens no window.
+cat > "$STUB_BIN/konsole" <<'EOF'
+#!/bin/sh
+echo "konsole $*" >> "$STUB_LOG"
 EOF
 
 chmod 755 "$STUB_BIN"/*
@@ -163,6 +178,7 @@ export PATH
 export HOME="$WORK/home"
 export XDG_CONFIG_HOME="$WORK/config"
 export XDG_CACHE_HOME="$WORK/cache"
+unset TERMINAL
 mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
 
 passed=0
@@ -542,6 +558,38 @@ Flatpak: 0
 AppImage: 0
 Total: 0" "$out"
 
+# One update notification at a time. run clears the cache directory, so
+# these tests call bs-update directly after the first run, which keeps
+# the notification file of the run before.
+NOTE="$XDG_CACHE_HOME/bs-updater/notification"
+run -l --notify
+sleep 1
+lacks "the first update notification replaces nothing" \
+    " -r " "$(cat "$WORK/log")"
+
+# A notification that is still on the screen. Its notify-send process is
+# gone, the same as in the test stub.
+echo 7 > "$NOTE"
+: > "$STUB_LOG"
+"$BS_UPDATE" -l --notify >/dev/null 2>&1
+sleep 1
+contains "a new update notification replaces the one on the screen" \
+    "-r 7 " "$(cat "$WORK/log")"
+
+echo 7 > "$NOTE"
+: > "$STUB_LOG"
+STUB_REPO_COUNT=0 STUB_AUR_COUNT=0 STUB_FLATPAK_COUNT=0 STUB_APPIMAGE_COUNT=0 \
+    "$BS_UPDATE" -l --notify >/dev/null 2>&1
+contains "a check that finds no updates closes the update notification" \
+    "CloseNotification 7" "$(cat "$WORK/log")"
+check "and forgets it" "no" "$([ -e "$NOTE" ] && echo yes || echo no)"
+
+echo 7 > "$NOTE"
+: > "$STUB_LOG"
+"$BS_UPDATE" --interaction silent --start >/dev/null 2>&1
+contains "starting an update closes the update notification" \
+    "CloseNotification 7" "$(cat "$WORK/log")"
+
 echo
 echo "# A failing tool"
 STUB_PARU_RC=1 run
@@ -624,6 +672,7 @@ contains "silent --start reports the result" \
 run --interaction auto --start
 lacks "auto --start opens a terminal instead of running in the background" \
     "--sudoflags" "$(cat "$WORK/log")"
+contains "auto --start opens the terminal" "konsole -e" "$(cat "$WORK/log")"
 
 run --tools pacman --interaction auto
 check "pacman gets --noconfirm" "sudo pacman -Syu --noconfirm

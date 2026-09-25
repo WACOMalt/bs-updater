@@ -38,6 +38,8 @@
 # The tray widget writes the level to the configuration file as well.
 #
 # The notification is clickable. A click runs bs-update in a terminal window.
+# Only one update notification shows at a time. A new check replaces it,
+# and a check that finds no updates closes it.
 
 # Run Gear Lever without a display connection. Its CLI also starts the GTK
 # application, which shows a window and a tray icon. With no display, only
@@ -391,26 +393,68 @@ do_silent() {
 # Install the updates the way the interaction level says. The tray widget
 # calls this, so the level decides between a terminal and a silent run.
 do_start() {
+    # The user started the update, so the notification has no use now.
+    close_notification
     case "$INTERACTION" in
     silent) do_silent ;;
     *)      open_in_terminal ;;
     esac
 }
 
+# Only one "updates available" notification is on the screen at a time.
+# A new check replaces it, and a check that finds no updates closes it.
+# The notify-send process that waits for a click writes the notification
+# ID to the first line of this file, and the clicked action to the second
+# line. Its process ID is in the .pid file.
+NOTIFICATION="$STATE_DIR/notification"
+
+# Stop the process that waits for a click on the update notification, and
+# print the notification ID. The notification stays on the screen.
+release_notification() {
+    [ -r "$NOTIFICATION" ] || return 0
+    pid=$(cat "$NOTIFICATION.pid" 2>/dev/null)
+    if [ -n "$pid" ] && [ "$(ps -o comm= -p "$pid" 2>/dev/null)" = notify-send ]; then
+        kill "$pid" 2>/dev/null
+    fi
+    rm -f "$NOTIFICATION.pid"
+    id=$(head -n 1 "$NOTIFICATION")
+    case "$id" in ''|*[!0-9]*) ;; *) echo "$id" ;; esac
+}
+
+# Remove the update notification from the screen.
+close_notification() {
+    id=$(release_notification)
+    rm -f "$NOTIFICATION"
+    [ -n "$id" ] || return 0
+    gdbus call --session --dest org.freedesktop.Notifications \
+        --object-path /org/freedesktop/Notifications \
+        --method org.freedesktop.Notifications.CloseNotification "$id" \
+        >/dev/null 2>&1
+}
+
 show_notification() {
     if [ "$total" -gt 0 ]; then
         case "$1" in --notify-uptodate) return ;; esac
+        mkdir -p "$STATE_DIR"
+        id=$(release_notification)
         # Background the wait-for-click so callers get the counts immediately.
         (
-            choice=$(notify-send -a "bs-updater" -i update-high -t 0 \
-                -A default="Update now" \
+            notify-send -a "bs-updater" -i update-high -t 0 -p \
+                ${id:+-r "$id"} -A default="Update now" \
                 "$total updates available" \
-                "$summary — click to update system")
+                "$summary — click to update system" > "$NOTIFICATION" &
+            echo "$!" > "$NOTIFICATION.pid"
+            # If a newer check stopped notify-send, that check owns the
+            # notification now, so do nothing more.
+            wait "$!" || exit 0
+            choice=$(sed -n 2p "$NOTIFICATION")
+            rm -f "$NOTIFICATION" "$NOTIFICATION.pid"
             if [ -n "$choice" ]; then
                 open_in_terminal
             fi
         ) >/dev/null 2>&1 &
     else
+        close_notification
         case "$1" in
         --notify-always|--notify-uptodate)
             notify-send -a "bs-updater" -i update-none -t 5000 \

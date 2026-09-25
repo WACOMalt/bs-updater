@@ -69,12 +69,17 @@ A failed update run does not write the file. The icon then does not change.
 
 | Notification | Condition | Duration |
 | --- | --- | --- |
-| `<n> updates available` | The total is more than zero. | Until the user closes it. |
+| `<n> updates available` | The total is more than zero. | Until the user or a check closes it. |
 | `System is up to date` | A manual check gives a total of zero. | 5 seconds. |
 
 The first notification has the button "Update now". A click on the button
 starts `bs-update` in a new terminal window. The body of the notification
 shows the count of each source.
+
+The screen shows one notification `<n> updates available` at a time. A new
+check replaces that notification. A check that finds no updates closes it.
+When the user starts an update from the widget, the notification also
+closes.
 
 The two settings of the page "General" control the two notifications. A
 scheduled check never sends the up-to-date notification.

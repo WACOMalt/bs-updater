@@ -153,6 +153,7 @@ that terminal, at every level.
 - When an update run completes, the widget changes to the up-to-date state at once.
 - The icon is a white circle with a check mark when the system is up to date.
 - The icon is an orange circle with an arrow when updates are available. A notification also shows.
+- Only one update notification is on the screen at a time. A new check replaces it, and a check that finds no updates closes it.
 - Click the notification to install all updates in a terminal window.
 - Click the icon to check for updates. If updates are available, a click starts the installation.
 - The widget contains a copy of the `bs-update` command. The widget installs the command to `~/.local/bin` if it is not present, and replaces an older copy of it after a widget update.
@@ -165,6 +166,7 @@ that terminal, at every level.
 - KDE Plasma 6
 - A terminal application. bs-updater uses the KDE default terminal. If none is set, it uses Konsole.
 - libnotify (supplies `notify-send`)
+- GLib (supplies `gdbus`, to close an old update notification). The package is `glib2` on Arch, Fedora and Nobara, and `libglib2.0-bin` on Debian and Ubuntu.
 
 Each update source needs its own tool. You only need the tools of the sources
 you enable:

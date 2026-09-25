@@ -35,6 +35,14 @@ if command -v dpkg >/dev/null 2>&1; then
 fi
 command -v flatpak >/dev/null 2>&1 || absent="$absent flatpak(Flatpak applications)"
 flatpak info it.mijorus.gearlever >/dev/null 2>&1 || absent="$absent gearlever(AppImages)"
+# Only report plasmoid-updater to users who installed widgets with "Get
+# New Widgets", and look where bs-update looks for it.
+if [ -e "${XDG_DATA_HOME:-$HOME/.local/share}/knewstuff3/plasmoids.knsregistry" ] \
+    && ! command -v plasmoid-updater >/dev/null 2>&1 \
+    && [ ! -x "$HOME/.cargo/bin/plasmoid-updater" ] \
+    && [ ! -x "$BIN_DIR/plasmoid-updater" ]; then
+    absent="$absent plasmoid-updater(KDE Plasma 6 plasmoids; cargo install plasmoid-updater)"
+fi
 if [ -n "$absent" ]; then
     echo "These update sources have no tool installed:$absent"
     echo "Install the ones you want, and uncheck the rest in the widget settings."

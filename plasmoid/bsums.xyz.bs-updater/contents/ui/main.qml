@@ -53,6 +53,7 @@ PlasmoidItem {
         "apt=" + (Plasmoid.configuration.toolApt ? "on" : "off") + "\n" +
         "flatpak=" + (Plasmoid.configuration.toolFlatpak ? "on" : "off") + "\n" +
         "gearlever=" + (Plasmoid.configuration.toolGearLever ? "on" : "off") + "\n" +
+        "plasmoid-updater=" + (Plasmoid.configuration.toolPlasmoidUpdater ? "on" : "off") + "\n" +
         "interaction=" + interactionName + "\n"
 
     // 0 ask before each source installs, 1 install without a question,

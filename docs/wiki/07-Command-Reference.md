@@ -67,6 +67,7 @@ nobara-sync  off nobara-sync: RPM packages
 apt          off APT: Debian packages
 flatpak      on  Flatpak: Flatpak applications and runtimes
 gearlever    on  Gear Lever: AppImages
+plasmoid-updater off plasmoid-updater: KDE Plasma 6 plasmoids
 ```
 
 The columns are the identifier, the state, the name of the tool and the

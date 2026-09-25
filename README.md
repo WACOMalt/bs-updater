@@ -20,6 +20,7 @@ in the widget settings.
 | Flatpak applications and runtimes | `flatpak` | any | yes |
 | Flatpak applications and runtimes | `nobara-sync` | Nobara | no |
 | AppImages integrated with Gear Lever | `Gear Lever` | any | yes |
+| KDE Plasma 6 plasmoids, and the other items from "Get New…" | `plasmoid-updater` | any | no |
 
 paru is listed twice because it updates two kinds of package, and you can use
 it for one of them without the other. nobara-sync is listed twice for the same
@@ -142,6 +143,7 @@ These are the options each source gets at the `auto` and `silent` levels:
 | `apt` | `-y`, with `DEBIAN_FRONTEND=noninteractive` for the questions about a changed configuration file |
 | `flatpak` | `-y` |
 | `Gear Lever` | `--yes`, which it always gets |
+| `plasmoid-updater` | `--yes` |
 | `nobara-sync` | none |
 
 A run you start in a terminal yourself always asks for the root password in
@@ -179,6 +181,8 @@ you enable:
 - apt, for Debian packages (Debian, Ubuntu; part of the distribution)
 - Flatpak, for Flatpak applications and runtimes
 - Gear Lever (Flatpak: `it.mijorus.gearlever`), for AppImages
+- [plasmoid-updater](https://github.com/uwuclxdy/plasmoid-updater), for KDE Plasma 6 plasmoids. No distribution has a package for it yet. Install it with `cargo install plasmoid-updater`, or put the binary from its [releases page](https://github.com/uwuclxdy/plasmoid-updater/releases) into `~/.local/bin` and make it executable. `bs-update` also finds it in `~/.cargo/bin`. The widget settings warn you if it is absent.
+  plasmoid-updater does not restart Plasma here, because a restart would stop the update run. The updated plasmoids load when you log in again or restart Plasma.
 
 ## Installation
 
@@ -244,6 +248,7 @@ nobara-sync-flatpak=off
 apt=off
 flatpak=on
 gearlever=on
+plasmoid-updater=off
 interaction=confirm
 ```
 

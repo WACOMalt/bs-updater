@@ -58,7 +58,7 @@ Chapter 8 describes each mechanism in detail.
 
 ## 2.5 The supported tools
 
-`bs-update` drives eight tool entries. Each entry has an identifier, a
+`bs-update` drives ten tool entries. Each entry has an identifier, a
 package domain and a name for the user.
 
 | Identifier | Package domain | Name for the user |
@@ -68,9 +68,11 @@ package domain and a name for the user.
 | `paru-aur` | aur | paru, AUR packages |
 | `dnf` | rpm | DNF |
 | `nobara-sync` | rpm | nobara-sync |
+| `nobara-sync-flatpak` | flatpak | nobara-sync, Flatpak applications |
 | `apt` | deb | APT |
 | `flatpak` | flatpak | Flatpak |
 | `gearlever` | appimage | Gear Lever |
+| `plasmoid-updater` | plasmoid | plasmoid-updater |
 
 The command runs the enabled tools in this sequence. Chapter 3 describes the
 package domains and the conflict rule.

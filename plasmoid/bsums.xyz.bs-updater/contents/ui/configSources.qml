@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Controls as QQC2
 import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
+import org.kde.plasma.plasma5support as P5Support
 
 KCM.SimpleKCM {
     id: root
@@ -25,6 +26,8 @@ KCM.SimpleKCM {
     property bool cfg_toolFlatpakDefault: true
     property alias cfg_toolGearLever: gearLeverBox.checked
     property bool cfg_toolGearLeverDefault: true
+    property alias cfg_toolPlasmoidUpdater: plasmoidUpdaterBox.checked
+    property bool cfg_toolPlasmoidUpdaterDefault: false
 
     // Every tool bs-update can drive, in the order it runs them. paru and
     // nobara-sync each appear twice because they update two kinds of
@@ -38,7 +41,8 @@ KCM.SimpleKCM {
         { box: nobaraSyncFlatpakBox, covers: "flatpak", name: i18n("nobara-sync") },
         { box: aptBox,         covers: "deb",      name: i18n("apt") },
         { box: flatpakBox,     covers: "flatpak",  name: i18n("flatpak") },
-        { box: gearLeverBox,   covers: "appimage", name: i18n("Gear Lever") }
+        { box: gearLeverBox,   covers: "appimage", name: i18n("Gear Lever") },
+        { box: plasmoidUpdaterBox, covers: "plasmoid", name: i18n("plasmoid-updater") }
     ]
 
     readonly property var coverNames: ({
@@ -47,7 +51,8 @@ KCM.SimpleKCM {
         "rpm": i18n("RPM packages"),
         "deb": i18n("Debian packages"),
         "flatpak": i18n("Flatpak applications and runtimes"),
-        "appimage": i18n("AppImages")
+        "appimage": i18n("AppImages"),
+        "plasmoid": i18n("KDE Plasma 6 plasmoids")
     })
 
     // Two checked tools that cover the same kind of package would install
@@ -84,6 +89,35 @@ KCM.SimpleKCM {
         return ""
     }
 
+    // plasmoid-updater is not a distribution package yet, so the page
+    // looks for it when its checkbox is checked. bin/bs-update looks in
+    // the same three places.
+    readonly property string plasmoidUpdaterTest:
+        'command -v plasmoid-updater >/dev/null || ' +
+        '[ -x "$HOME/.cargo/bin/plasmoid-updater" ] || ' +
+        '[ -x "$HOME/.local/bin/plasmoid-updater" ]'
+
+    // null until the test has run, then true or false.
+    property var plasmoidUpdaterFound: null
+
+    P5Support.DataSource {
+        id: exec
+        engine: "executable"
+        connectedSources: []
+        onNewData: (sourceName, data) => {
+            disconnectSource(sourceName)
+            root.plasmoidUpdaterFound = data["exit code"] === 0
+        }
+    }
+
+    function testPlasmoidUpdater() {
+        if (plasmoidUpdaterBox.checked) {
+            exec.connectSource(plasmoidUpdaterTest)
+        }
+    }
+
+    Component.onCompleted: testPlasmoidUpdater()
+
     ColumnLayout {
         // The page does not bind the width of its content, so wrapping text
         // has to be held to the width of the page itself. Without this the
@@ -97,6 +131,21 @@ KCM.SimpleKCM {
             type: Kirigami.MessageType.Warning
             text: root.warning
             visible: root.warning.length > 0
+        }
+
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            Layout.maximumWidth: root.width - Kirigami.Units.gridUnit
+            type: Kirigami.MessageType.Warning
+            visible: plasmoidUpdaterBox.checked && root.plasmoidUpdaterFound === false
+            text: i18n("plasmoid-updater is not installed, so bs-updater cannot update the plasmoids. Install it with \"cargo install plasmoid-updater\", or put the binary from its GitHub releases page into ~/.local/bin and make it executable. Then open this page again.")
+            actions: [
+                Kirigami.Action {
+                    text: i18n("Open the releases page")
+                    icon.name: "internet-services"
+                    onTriggered: Qt.openUrlExternally("https://github.com/uwuclxdy/plasmoid-updater/releases")
+                }
+            ]
         }
 
         Kirigami.FormLayout {
@@ -162,6 +211,15 @@ KCM.SimpleKCM {
                 Kirigami.FormData.label: i18n("AppImages:")
                 text: i18n("Gear Lever")
             }
+
+            Item { Kirigami.FormData.isSection: true }
+
+            QQC2.CheckBox {
+                id: plasmoidUpdaterBox
+                Kirigami.FormData.label: i18n("KDE Plasma 6 plasmoids:")
+                text: i18n("plasmoid-updater (also updates other items from \"Get New…\")")
+                onToggled: root.testPlasmoidUpdater()
+            }
         }
 
         QQC2.Label {
@@ -169,7 +227,7 @@ KCM.SimpleKCM {
             Layout.maximumWidth: root.width - Kirigami.Units.gridUnit
             wrapMode: Text.Wrap
             opacity: 0.7
-            text: i18n("An unchecked source is neither checked for updates nor updated. The tool of a checked source has to be installed. The defaults suit Arch: on Fedora check dnf, on Nobara check nobara-sync, on Debian or Ubuntu check apt, and uncheck the Arch sources.")
+            text: i18n("An unchecked source is neither checked for updates nor updated. The tool of a checked source has to be installed. Updated plasmoids load at the next start of Plasma. The defaults suit Arch: on Fedora check dnf, on Nobara check nobara-sync, on Debian or Ubuntu check apt, and uncheck the Arch sources.")
         }
     }
 }

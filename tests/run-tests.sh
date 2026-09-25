@@ -173,7 +173,31 @@ EOF
 
 chmod 755 "$STUB_BIN"/*
 
+# plasmoid-updater has its own directory, so a test can leave it out of
+# the PATH. "check" prints what plasmoid-updater 0.2.1 prints: the count
+# line, then a table with bold headers, or one line when nothing is new.
+PLASMOID_BIN="$WORK/plasmoid-bin"
+mkdir -p "$PLASMOID_BIN"
+cat > "$PLASMOID_BIN/plasmoid-updater" <<'EOF'
+#!/bin/sh
+echo "plasmoid-updater $*" >> "$STUB_LOG"
+n=${STUB_PLASMOID_COUNT:-0}
+case "$1" in
+check)
+    if [ "$n" -eq 0 ]; then echo "No updates available"; exit 0; fi
+    if [ "$n" -eq 1 ]; then echo "1 update available."; else echo "$n updates available."; fi
+    printf ' \033[1mNAME\033[0m      \033[1mCURRENT\033[0m  \033[1mAVAILABLE\033[0m\n'
+    i=1
+    while [ "$i" -le "$n" ]; do echo " Widget $i    0.0.1      1.0.0"; i=$((i + 1)); done
+    ;;
+esac
+EOF
+chmod 755 "$PLASMOID_BIN/plasmoid-updater"
+
 PATH="$STUB_BIN:$PATH"
+# The PATH without plasmoid-updater, for the test of a missing tool.
+PATH_WITHOUT_PLASMOID=$PATH
+PATH="$PLASMOID_BIN:$PATH"
 export PATH
 export HOME="$WORK/home"
 export XDG_CONFIG_HOME="$WORK/config"
@@ -379,7 +403,52 @@ nobara-sync-flatpak off asks       nobara-sync (Flatpak applications): Flatpak a
 apt          off asks       APT: Debian packages
 flatpak      on  asks       Flatpak: Flatpak applications and runtimes
 gearlever    on  asks       Gear Lever: AppImages
+plasmoid-updater off asks       plasmoid-updater: KDE Plasma 6 plasmoids
 interaction level: confirm" "$out"
+
+echo
+echo "# KDE Plasma 6 plasmoids"
+STUB_PLASMOID_COUNT=3 run --tools plasmoid-updater -l
+check "plasmoid-updater counts from its summary line" \
+    "Plasmoids: 3
+Total: 3" "$out"
+
+STUB_PLASMOID_COUNT=1 run --tools plasmoid-updater -l
+check "one plasmoid update counts one" "Plasmoids: 1
+Total: 1" "$out"
+
+run --tools plasmoid-updater -l
+check "no plasmoid update counts zero" "Plasmoids: 0
+Total: 0" "$out"
+
+run --tools plasmoid-updater
+check "plasmoid-updater asks at the confirm level and leaves Plasma running" \
+    "plasmoid-updater update --no-restart-plasma" "$(cat "$WORK/log")"
+contains "the run says how to load the new plasmoids" \
+    "restart Plasma" "$out"
+
+run --tools plasmoid-updater --interaction auto
+check "auto adds --yes" \
+    "plasmoid-updater update --no-restart-plasma --yes" "$(cat "$WORK/log")"
+
+# The real program can be installed on the test machine as well.
+if ! PATH=$PATH_WITHOUT_PLASMOID command -v plasmoid-updater >/dev/null 2>&1; then
+    PATH=$PATH_WITHOUT_PLASMOID run --tools plasmoid-updater -l
+    check "a missing plasmoid-updater counts zero" "Plasmoids: 0
+Total: 0" "$out"
+    contains "a missing plasmoid-updater says how to install it" \
+        "cargo install plasmoid-updater" "$err"
+    PATH=$PATH_WITHOUT_PLASMOID run --tools plasmoid-updater
+    check "a missing plasmoid-updater fails the run" "1" "$rc"
+
+    mkdir -p "$HOME/.cargo/bin"
+    cp "$PLASMOID_BIN/plasmoid-updater" "$HOME/.cargo/bin/"
+    STUB_PLASMOID_COUNT=2 PATH=$PATH_WITHOUT_PLASMOID run --tools plasmoid-updater -l
+    check "plasmoid-updater in ~/.cargo/bin is found outside the PATH" \
+        "Plasmoids: 2
+Total: 2" "$out"
+    rm -r "$HOME/.cargo"
+fi
 
 echo
 echo "# Fedora and Nobara"

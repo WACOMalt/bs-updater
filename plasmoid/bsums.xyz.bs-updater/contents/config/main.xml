@@ -74,5 +74,11 @@
             <label>Update AppImages with Gear Lever</label>
             <default>true</default>
         </entry>
+        <!-- Off by default: it needs plasmoid-updater, which no
+             distribution ships as a package yet. -->
+        <entry name="toolPlasmoidUpdater" type="Bool">
+            <label>Update KDE Plasma 6 plasmoids with plasmoid-updater</label>
+            <default>false</default>
+        </entry>
     </group>
 </kcfg>

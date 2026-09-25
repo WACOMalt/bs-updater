@@ -26,6 +26,7 @@ necessary.
 | Debian packages | APT | Debian, Ubuntu |
 | Flatpak applications and runtimes | Flatpak | all |
 | AppImages | Gear Lever, `it.mijorus.gearlever` | all |
+| KDE Plasma 6 plasmoids | plasmoid-updater, from `cargo install plasmoid-updater` or its releases page | all |
 
 pacman-contrib supplies the `checkupdates` command. `bs-update` counts the
 repository updates with that command. DNF, APT and nobara-sync are parts of

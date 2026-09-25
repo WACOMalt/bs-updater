@@ -21,7 +21,8 @@
 #   bs-update -h, --help       show this help text
 #
 # The supported tools are pacman, paru-repo, paru-aur, dnf, nobara-sync,
-# nobara-sync-flatpak, apt, flatpak, and gearlever. The tray widget writes the enabled ones to
+# nobara-sync-flatpak, apt, flatpak, gearlever, and plasmoid-updater. The
+# tray widget writes the enabled ones to
 # ~/.config/bs-updater/tools.conf. Without that file the Arch tools except
 # pacman are enabled, because paru already updates repository packages.
 # On Fedora enable dnf, on Nobara enable nobara-sync, and on Debian or
@@ -63,7 +64,8 @@ nobara-sync|rpm|nobara-sync (RPM packages)
 nobara-sync-flatpak|flatpak|nobara-sync (Flatpak applications)
 apt|deb|APT
 flatpak|flatpak|Flatpak
-gearlever|appimage|Gear Lever'
+gearlever|appimage|Gear Lever
+plasmoid-updater|plasmoid|plasmoid-updater'
 
 # The kinds of package a tool can cover. One line each:
 #   id|heading used in the list output|name shown to the user
@@ -75,7 +77,8 @@ aur|AUR|AUR packages
 rpm|RPM|RPM packages
 deb|APT|Debian packages
 flatpak|Flatpak|Flatpak applications and runtimes
-appimage|AppImage|AppImages'
+appimage|AppImage|AppImages
+plasmoid|Plasmoids|KDE Plasma 6 plasmoids'
 
 # Used when the configuration file does not exist. paru covers repository
 # packages, so plain pacman stays off and the two do not conflict. The RPM
@@ -86,7 +89,7 @@ DEFAULT_TOOLS='paru-repo paru-aur flatpak gearlever'
 # The tools that can install updates without a confirmation question, and
 # the option that does it. nobara-sync is absent: it has no documented
 # option for that, so it asks even at the auto and silent levels.
-UNATTENDED_CAPABLE='pacman paru-repo paru-aur dnf apt flatpak gearlever'
+UNATTENDED_CAPABLE='pacman paru-repo paru-aur dnf apt flatpak gearlever plasmoid-updater'
 
 # Used when the configuration file does not name a level.
 DEFAULT_INTERACTION=confirm
@@ -227,6 +230,37 @@ count_deb() {
         END { print n + 0 }'
 }
 
+# plasmoid-updater comes from "cargo install" or as a release binary, so
+# it is often outside the PATH that the tray widget gives its commands.
+find_plasmoid_updater() {
+    command -v plasmoid-updater 2>/dev/null && return 0
+    for candidate in \
+        "$HOME/.cargo/bin/plasmoid-updater" \
+        "$HOME/.local/bin/plasmoid-updater"
+    do
+        [ -x "$candidate" ] && { printf '%s\n' "$candidate"; return 0; }
+    done
+    return 1
+}
+
+PLASMOID_UPDATER_MISSING='plasmoid-updater is not installed. Install it with "cargo install plasmoid-updater", or put the binary from https://github.com/uwuclxdy/plasmoid-updater/releases into ~/.local/bin and make it executable'
+
+# The number of plasmoids with an update available. "plasmoid-updater
+# check" prints a line such as "3 updates available." and then a table,
+# or "No updates available". The table headers are bold, so the escape
+# codes are removed first.
+count_plasmoids() {
+    if ! tool=$(find_plasmoid_updater); then
+        warn "$PLASMOID_UPDATER_MISSING"
+        echo 0
+        return
+    fi
+    esc=$(printf '\033')
+    "$tool" check 2>/dev/null | sed "s/$esc\[[0-9;]*m//g" | awk '
+        $2 ~ /^updates?$/ && $3 == "available." { n = $1 }
+        END { print n + 0 }'
+}
+
 # The number of updates one tool has available.
 count_tool() {
     case "$1" in
@@ -245,6 +279,7 @@ count_tool() {
     # a newer version available. --yes skips the interactive question.
     gearlever)        $GEARLEVER --list-updates 2>/dev/null \
                       | grep -v '^No updates available' | grep -c . ;;
+    plasmoid-updater) count_plasmoids ;;
     esac
 }
 
@@ -319,6 +354,17 @@ update_tool() {
         ;;
     flatpak)   flatpak update ${yes:+-y} ;;
     gearlever) $GEARLEVER --update --all --yes ;;
+    # --no-restart-plasma: a run that the tray widget starts is part of the
+    # systemd unit of plasmashell, so a restart of plasmashell would stop
+    # this run as well. The new versions load at the next start of Plasma.
+    plasmoid-updater)
+        if ! tool=$(find_plasmoid_updater); then
+            warn "$PLASMOID_UPDATER_MISSING"
+            return 1
+        fi
+        "$tool" update --no-restart-plasma ${yes:+--yes} || return 1
+        echo "Log out and log in again, or restart Plasma, to load the updated plasmoids."
+        ;;
     esac
 }
 

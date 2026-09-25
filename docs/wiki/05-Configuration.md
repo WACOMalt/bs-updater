@@ -35,13 +35,17 @@ not install them.
 | Debian packages, Debian and Ubuntu | apt | cleared |
 | Flatpak applications and runtimes | flatpak | selected |
 | AppImages | Gear Lever | selected |
+| KDE Plasma 6 plasmoids | plasmoid-updater | cleared |
 
-The page shows a warning in two conditions:
+The page shows a warning in three conditions:
 
 - Two selected tools update the same kind of package. The warning names the
   two tools and the kind of package.
 - The user selects no tool. bs-updater then does not check and does not
   update.
+- The user selects plasmoid-updater, but the page cannot find it. The
+  warning tells how to install it, and it has a button that opens the
+  releases page.
 
 The warning does not stop the user. `bs-update` applies the conflict rule of
 chapter 3 if the condition stays.
@@ -71,6 +75,7 @@ nobara-sync=off
 apt=off
 flatpak=on
 gearlever=on
+plasmoid-updater=off
 ```
 
 ## 5.5 The syntax of the configuration file
@@ -119,6 +124,7 @@ nobara-sync  off nobara-sync: RPM packages
 apt          off APT: Debian packages
 flatpak      on  Flatpak: Flatpak applications and runtimes
 gearlever    on  Gear Lever: AppImages
+plasmoid-updater off plasmoid-updater: KDE Plasma 6 plasmoids
 ```
 
 ## 5.8 A temporary selection

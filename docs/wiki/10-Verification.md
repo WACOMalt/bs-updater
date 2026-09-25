@@ -6,11 +6,11 @@
 ./tests/run-tests.sh
 ```
 
-The suite tests the command `bs-update`. Version 1.12.2 has 89 tests. The
+The suite tests the command `bs-update`. Version 1.13.0 has 99 tests. The
 suite writes one line for each test and a summary at the end:
 
 ```
-89 passed, 0 failed
+99 passed, 0 failed
 ```
 
 The exit code is 0 if each test passes. The exit code is 1 if one test or
@@ -80,6 +80,7 @@ the correct number.
 | Debian and Ubuntu | APT counts with a simulation and installs after a refresh. |
 | Notifications | The notification holds the count of each enabled source. A new check replaces the update notification, and a check with no updates closes it. |
 | A failed tool | The run continues, gives the code 1 and writes no state file. |
+| KDE Plasma 6 plasmoids | plasmoid-updater counts from its summary line, gets `--yes` only at the auto level, and a missing program gives a message that tells how to install it. |
 | Help | The help text is available, and an unknown option fails. |
 
 ## 10.5 Examples of the assertions

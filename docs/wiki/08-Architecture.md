@@ -155,7 +155,33 @@ The update command is `--update --all --yes`. The option `--all` examines
 each integrated AppImage and downloads only an AppImage with a newer
 version. The option `--yes` answers the interactive question.
 
-## 8.8 The state file
+## 8.8 plasmoid-updater
+
+plasmoid-updater updates the items that the dialog "Get New…" of KDE Plasma
+installed: plasmoids, and also themes, wallpapers and KWin scripts. It
+comes from https://github.com/uwuclxdy/plasmoid-updater.
+
+| Step | Command |
+| --- | --- |
+| The count | `plasmoid-updater check` |
+| The installation | `plasmoid-updater update --no-restart-plasma`, with `--yes` at the levels auto and silent |
+
+`plasmoid-updater check` writes a line such as
+`3 updates available.` and then a table. The function `count_plasmoids` reads the number
+from that line. It removes the escape codes of the bold table headers first.
+
+No distribution has a package for plasmoid-updater. Thus the function
+`find_plasmoid_updater` looks in the `PATH`, then in `~/.cargo/bin` and
+in `~/.local/bin`. The tray widget gives its commands a short `PATH`,
+which often does not include `~/.cargo/bin`. If the program is absent, the
+count is 0, the update fails, and a message tells how to install it.
+
+The update does not restart plasmashell. The widget starts each update run
+in the systemd unit of plasmashell. That unit stops all its processes when
+plasmashell stops, so a restart would also stop the update run. The new
+versions load at the next start of Plasma.
+
+## 8.9 The state file
 
 ```
 ~/.cache/bs-updater/last-update
@@ -172,7 +198,7 @@ again.
 A poll of one file every 3 seconds is inexpensive. A file monitor is an extra dependency for the widget, so the design uses
 the poll.
 
-## 8.9 The update notification
+## 8.10 The update notification
 
 The screen shows one notification `<n> updates available` at a time. The
 function `show_notification` keeps two files for it:
@@ -199,7 +225,7 @@ function `close_notification` stops the process, then it calls the D-Bus
 method `CloseNotification` with `gdbus`. If `gdbus` is absent, the
 notification stays until the user closes it.
 
-## 8.10 The widget and the shell
+## 8.11 The widget and the shell
 
 The widget has one `DataSource` with the engine `executable`. Each command
 is one source name. The handler `onNewData` disconnects the source and then
@@ -222,7 +248,7 @@ settings. QML binds that string to the settings, so a change of a checkbox
 makes a new string. The handler `onWriteToolsConfigCommandChanged` then
 writes the file. The file always agrees with the settings.
 
-## 8.11 The installation of the command by the widget
+## 8.12 The installation of the command by the widget
 
 The widget contains a copy of `bs-update` in `contents/code/`. At each
 start, the widget compares that copy with `~/.local/bin/bs-update`:
@@ -238,7 +264,7 @@ The third row holds the command and the widget at the same version after a
 widget update. The fourth row protects a file of a different program with
 the same name.
 
-## 8.12 Design decisions
+## 8.13 Design decisions
 
 | Decision | Reason |
 | --- | --- |

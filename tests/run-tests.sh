@@ -781,6 +781,31 @@ check "an explicit level wins over the configured one" \
 clear_config
 
 echo
+echo "# Widget files"
+PLASMOID_DIR="$REPO_DIR/plasmoid/bsums.xyz.bs-updater/contents"
+# Plasma stops reading an invalid main.xml at the error, and ignores each
+# setting after it without a message.
+if command -v xmllint >/dev/null 2>&1; then
+    check "the settings file of the widget is valid XML" "" \
+        "$(xmllint --noout "$PLASMOID_DIR/config/main.xml" 2>&1)"
+fi
+# Each setting that the widget reads must have an entry in main.xml.
+missing_keys=
+for key in $(cat "$PLASMOID_DIR"/ui/*.qml | grep -o 'configuration\.[A-Za-z]*' \
+    | sed 's/configuration\.//' | sort -u); do
+    grep -q "<entry name=\"$key\"" "$PLASMOID_DIR/config/main.xml" \
+        || missing_keys="$missing_keys $key"
+done
+check "each setting that the widget reads is in main.xml" "" "$missing_keys"
+missing_keys=
+for key in $(grep -o 'cfg_[A-Za-z]*:' "$PLASMOID_DIR"/ui/config*.qml \
+    | sed 's/.*cfg_//; s/:$//' | grep -v 'Default$' | sort -u); do
+    grep -q "<entry name=\"$key\"" "$PLASMOID_DIR/config/main.xml" \
+        || missing_keys="$missing_keys $key"
+done
+check "each setting on a settings page is in main.xml" "" "$missing_keys"
+
+echo
 echo "# Help"
 run --help
 contains "the help text shows the usage" "bs-update --tools LIST" "$out"

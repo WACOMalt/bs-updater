@@ -36,6 +36,7 @@ not install them.
 | Flatpak applications and runtimes | flatpak | selected |
 | AppImages | Gear Lever | selected |
 | KDE Plasma 6 plasmoids | plasmoid-updater | cleared |
+| KDE Plasma 6 plasmoids | Restart Plasma after plasmoid updates | cleared |
 
 The page shows a warning in three conditions:
 
@@ -76,6 +77,7 @@ apt=off
 flatpak=on
 gearlever=on
 plasmoid-updater=off
+restart-plasma=off
 ```
 
 ## 5.5 The syntax of the configuration file

@@ -54,6 +54,7 @@ PlasmoidItem {
         "flatpak=" + (Plasmoid.configuration.toolFlatpak ? "on" : "off") + "\n" +
         "gearlever=" + (Plasmoid.configuration.toolGearLever ? "on" : "off") + "\n" +
         "plasmoid-updater=" + (Plasmoid.configuration.toolPlasmoidUpdater ? "on" : "off") + "\n" +
+        "restart-plasma=" + (Plasmoid.configuration.restartPlasmaAfterPlasmoids ? "on" : "off") + "\n" +
         "interaction=" + interactionName + "\n"
 
     // 0 ask before each source installs, 1 install without a question,
@@ -131,8 +132,12 @@ PlasmoidItem {
     // older copy from a previous widget version is replaced as well, so
     // the command and the widget always agree on the settings. A file
     // that is not a bs-update script is left alone.
-    function ensureCommandInstalled() {
-        exec.connectSource(
+    //
+    // Each check and each update run does this step first as well. A
+    // widget update while Plasma runs replaces the bundled copy, but the
+    // widget starts again only with Plasma. Without the step, the old
+    // command stays until the next login.
+    readonly property string installCommand:
             "BIN=\"$HOME/.local/bin/bs-update\"; SRC='" + bundledScript + "'; " +
             "if [ -r \"$SRC\" ] && ! cmp -s \"$SRC\" \"$BIN\"; then " +
             "if [ ! -e \"$BIN\" ]; then " +
@@ -141,7 +146,10 @@ PlasmoidItem {
             "notify-send -a bs-updater -i update-none 'bs-updater' " +
             "'Installed the bs-update command to ~/.local/bin'; " +
             "elif grep -q '^# bs-updater:' \"$BIN\"; then " +
-            "cp \"$SRC\" \"$BIN\"; chmod 755 \"$BIN\"; fi; fi")
+            "cp \"$SRC\" \"$BIN\"; chmod 755 \"$BIN\"; fi; fi"
+
+    function ensureCommandInstalled() {
+        exec.connectSource(installCommand)
     }
 
     Component.onCompleted: {
@@ -182,13 +190,13 @@ PlasmoidItem {
         if (notifyUpdates && notifyClean) flag = "--notify-always"
         else if (notifyUpdates) flag = "--notify"
         else if (notifyClean) flag = "--notify-uptodate"
-        exec.connectSource("$HOME/.local/bin/bs-update -l " + flag)
+        exec.connectSource(installCommand + "; $HOME/.local/bin/bs-update -l " + flag)
     }
 
     // --start reads the interaction level and chooses a terminal run or a
     // background run itself, so both come from one place.
     function runUpdateNow() {
-        exec.connectSource("$HOME/.local/bin/bs-update --start")
+        exec.connectSource(installCommand + "; $HOME/.local/bin/bs-update --start")
     }
 
     Timer {

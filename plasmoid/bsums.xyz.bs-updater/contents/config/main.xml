@@ -82,5 +82,11 @@
             <label>Update KDE Plasma 6 plasmoids with plasmoid-updater</label>
             <default>false</default>
         </entry>
+        <!-- Restart Plasma at the end of a run that updated plasmoids, so
+             the new versions load at once. -->
+        <entry name="restartPlasmaAfterPlasmoids" type="Bool">
+            <label>Restart Plasma after plasmoid updates</label>
+            <default>false</default>
+        </entry>
     </group>
 </kcfg>

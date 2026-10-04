@@ -28,6 +28,8 @@ KCM.SimpleKCM {
     property bool cfg_toolGearLeverDefault: true
     property alias cfg_toolPlasmoidUpdater: plasmoidUpdaterBox.checked
     property bool cfg_toolPlasmoidUpdaterDefault: false
+    property alias cfg_restartPlasmaAfterPlasmoids: restartPlasmaBox.checked
+    property bool cfg_restartPlasmaAfterPlasmoidsDefault: false
 
     // Every tool bs-update can drive, in the order it runs them. paru and
     // nobara-sync each appear twice because they update two kinds of
@@ -220,6 +222,14 @@ KCM.SimpleKCM {
                 text: i18n("plasmoid-updater (also updates other items from \"Get New…\")")
                 onToggled: root.testPlasmoidUpdater()
             }
+
+            QQC2.CheckBox {
+                id: restartPlasmaBox
+                enabled: plasmoidUpdaterBox.checked
+                text: i18n("Restart Plasma after plasmoid updates")
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: i18n("The restart comes at the end of a run that updated plasmoids. A run in a terminal restarts Plasma when you close the window.")
+            }
         }
 
         QQC2.Label {
@@ -227,7 +237,7 @@ KCM.SimpleKCM {
             Layout.maximumWidth: root.width - Kirigami.Units.gridUnit
             wrapMode: Text.Wrap
             opacity: 0.7
-            text: i18n("An unchecked source is neither checked for updates nor updated. The tool of a checked source has to be installed. Updated plasmoids load at the next start of Plasma. The defaults suit Arch: on Fedora check dnf, on Nobara check nobara-sync, on Debian or Ubuntu check apt, and uncheck the Arch sources.")
+            text: i18n("An unchecked source is neither checked for updates nor updated. The tool of a checked source has to be installed. Updated plasmoids load at the next start of Plasma, unless Plasma restarts after the update. The defaults suit Arch: on Fedora check dnf, on Nobara check nobara-sync, on Debian or Ubuntu check apt, and uncheck the Arch sources.")
         }
     }
 }

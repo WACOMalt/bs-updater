@@ -182,7 +182,7 @@ you enable:
 - Flatpak, for Flatpak applications and runtimes
 - Gear Lever (Flatpak: `it.mijorus.gearlever`), for AppImages
 - [plasmoid-updater](https://github.com/uwuclxdy/plasmoid-updater), for KDE Plasma 6 plasmoids. No distribution has a package for it yet. Install it with `cargo install plasmoid-updater`, or put the binary from its [releases page](https://github.com/uwuclxdy/plasmoid-updater/releases) into `~/.local/bin` and make it executable. `bs-update` also finds it in `~/.cargo/bin`. The widget settings warn you if it is absent.
-  plasmoid-updater does not restart Plasma here, because a restart would stop the update run. The updated plasmoids load when you log in again or restart Plasma.
+  The updated plasmoids load when you log in again or restart Plasma. To restart Plasma at the end of a run that updated plasmoids, check "Restart Plasma after plasmoid updates" under plasmoid-updater. A run in a terminal then restarts Plasma when you close the window.
 
 ## Installation
 
@@ -249,6 +249,7 @@ apt=off
 flatpak=on
 gearlever=on
 plasmoid-updater=off
+restart-plasma=off
 interaction=confirm
 ```
 

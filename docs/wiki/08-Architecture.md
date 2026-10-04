@@ -184,10 +184,22 @@ in `~/.local/bin`. The tray widget gives its commands a short `PATH`,
 which often does not include `~/.cargo/bin`. If the program is absent, the
 count is 0, the update fails, and a message tells how to install it.
 
-The update does not restart plasmashell. The widget starts each update run
-in the systemd unit of plasmashell. That unit stops all its processes when
-plasmashell stops, so a restart would also stop the update run. The new
-versions load at the next start of Plasma.
+plasmoid-updater does not restart plasmashell itself. The widget starts
+each update run in the systemd unit of plasmashell. That unit stops all its
+processes when plasmashell stops, so a restart during the run would also
+stop the run. Without the setting `restart-plasma=on`, the new versions
+load at the next start of Plasma.
+
+With `restart-plasma=on`, a run that updated plasmoids restarts Plasma at
+its end. The function `restart_plasma` starts
+`systemctl --user restart plasma-plasmashell.service` with `systemd-run`,
+in a unit of its own. The restart then does not stop itself.
+
+| Run | Time of the restart |
+| --- | --- |
+| In the update window of the widget | After the user closes the window. The run writes the file `~/.cache/bs-updater/restart-plasma`, and the window then runs `bs-update --restart-plasma-if-pending`. |
+| In the background | After the notification with the result. |
+| In a terminal of the user | At the end of the run. |
 
 ## 8.9 The state file
 
@@ -259,7 +271,11 @@ writes the file. The file always agrees with the settings.
 ## 8.12 The installation of the command by the widget
 
 The widget contains a copy of `bs-update` in `contents/code/`. At each
-start, the widget compares that copy with `~/.local/bin/bs-update`:
+start, before each check and before each update run, the widget compares
+that copy with `~/.local/bin/bs-update`. A widget update while Plasma runs
+replaces the copy in `contents/code/`, but the widget starts again only
+with Plasma. The comparison before each check thus installs the new
+command without a new login.
 
 | Condition | Action |
 | --- | --- |

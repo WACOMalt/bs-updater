@@ -22,6 +22,7 @@ an option, it installs the updates of each enabled tool in sequence.
 | none | Installs the updates of each enabled tool. |
 | `-l`, `--list` | Counts the available updates. Installs nothing. |
 | `--list-tools` | Shows each supported tool and its state. |
+| `--restart-plasma-if-pending` | Restarts Plasma if the last run updated plasmoids and the configuration file has `restart-plasma=on`. The update window of the widget runs it when it closes. |
 | `--in-terminal` | Opens a terminal window and runs `bs-update` in it. |
 | `--tools LIST` | Uses this list of tools for one run. |
 | `--tools=LIST` | The same, with an equals sign. |

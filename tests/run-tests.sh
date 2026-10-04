@@ -178,6 +178,19 @@ cat > "$STUB_BIN/konsole" <<'EOF'
 echo "konsole $*" >> "$STUB_LOG"
 EOF
 
+# The restart of Plasma. systemctl says that the plasmashell unit is
+# active, unless STUB_PLASMA_ACTIVE says otherwise. Nothing restarts.
+cat > "$STUB_BIN/systemctl" <<'EOF'
+#!/bin/sh
+case "$*" in *is-active*) exit "${STUB_PLASMA_ACTIVE:-0}" ;; esac
+echo "systemctl $*" >> "$STUB_LOG"
+EOF
+
+cat > "$STUB_BIN/systemd-run" <<'EOF'
+#!/bin/sh
+echo "systemd-run $*" >> "$STUB_LOG"
+EOF
+
 # rpm gives the Fedora release of the system, which the stubs call 40.
 cat > "$STUB_BIN/rpm" <<'EOF'
 #!/bin/sh
@@ -451,6 +464,47 @@ check "with no plasmoid update, nothing is installed" \
     "plasmoid-updater check" "$(cat "$WORK/log")"
 lacks "and the run does not ask for a restart of Plasma" \
     "restart Plasma" "$out"
+
+RESTART="systemd-run --user --no-block --quiet --collect systemctl --user restart plasma-plasmashell.service"
+STUB_PLASMOID_COUNT=2 run --tools plasmoid-updater
+lacks "without the setting, the run does not restart Plasma" \
+    "systemd-run" "$(cat "$WORK/log")"
+
+echo "restart-plasma=on" | set_config
+STUB_PLASMOID_COUNT=2 run --tools plasmoid-updater
+check "the setting is not read as a tool" "" "$err"
+contains "with the setting, a run that updated plasmoids restarts Plasma" \
+    "$RESTART" "$(cat "$WORK/log")"
+lacks "and it does not tell the user to log out" "Log out" "$out"
+
+run --tools plasmoid-updater
+lacks "a run with no plasmoid update does not restart Plasma" \
+    "systemd-run" "$(cat "$WORK/log")"
+
+STUB_PLASMOID_COUNT=2 BS_UPDATE_IN_WINDOW=1 run --tools plasmoid-updater
+lacks "in the update window, the run does not restart Plasma at once" \
+    "systemd-run" "$(cat "$WORK/log")"
+contains "and it says that the restart comes when the window closes" \
+    "when you close this window" "$out"
+: > "$STUB_LOG"
+"$BS_UPDATE" --restart-plasma-if-pending
+contains "closing the window restarts Plasma" "$RESTART" "$(cat "$WORK/log")"
+: > "$STUB_LOG"
+"$BS_UPDATE" --restart-plasma-if-pending
+check "and only one time" "" "$(cat "$WORK/log")"
+
+STUB_PLASMOID_COUNT=2 STUB_PLASMA_ACTIVE=1 run --tools plasmoid-updater
+contains "without the plasmashell unit, the run says that it cannot restart Plasma" \
+    "cannot restart Plasma" "$err"
+
+STUB_PLASMOID_COUNT=2 run --tools plasmoid-updater --interaction silent --start
+contains "a silent run restarts Plasma after it reports the result" \
+    "$RESTART" "$(cat "$WORK/log")"
+
+run --tools plasmoid-updater --interaction auto --start
+contains "the update window restarts Plasma when it closes, if the run asks for it" \
+    "read line; '$BS_UPDATE' --restart-plasma-if-pending" "$(cat "$WORK/log")"
+clear_config
 
 # The real program can be installed on the test machine as well.
 if ! PATH=$PATH_WITHOUT_PLASMOID command -v plasmoid-updater >/dev/null 2>&1; then

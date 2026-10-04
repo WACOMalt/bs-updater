@@ -17,6 +17,11 @@
 #   bs-update --start          install the updates the way the interaction
 #                               level says: in a terminal, or in the background
 #   bs-update --list-tools     show every supported tool and whether it is enabled
+#   bs-update --restart-plasma-if-pending
+#                               restart Plasma if the last run updated plasmoids
+#                               and the configuration asks for a restart. The
+#                               update window of the widget runs this when it
+#                               closes.
 #   bs-update --in-terminal    run bs-update in a new terminal window
 #   bs-update -h, --help       show this help text
 #
@@ -142,6 +147,8 @@ read_config_tools() {
     selected=
     while IFS= read -r line || [ -n "$line" ]; do
         case "$line" in ''|'#'*) continue ;; esac
+        # Settings that share the file, not tools.
+        case "$line" in interaction=*|restart-plasma=*) continue ;; esac
         case "${line#*=}" in
         on|true|1|yes) selected="$selected ${line%%=*}" ;;
         esac
@@ -158,6 +165,16 @@ read_config_interaction() {
         case "$line" in 'interaction='*) level=${line#interaction=} ;; esac
     done < "$CONFIG_FILE"
     printf '%s' "$level"
+}
+
+# Read "restart-plasma=on" from the file the widget writes. On means:
+# restart Plasma after a run that updated plasmoids.
+read_config_restart() {
+    restart=off
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in 'restart-plasma='*) restart=${line#restart-plasma=} ;; esac
+    done < "$CONFIG_FILE"
+    case "$restart" in on|true|1|yes) printf on ;; *) printf off ;; esac
 }
 
 # Sanity check a list of tools. Drops names this version does not know,
@@ -385,7 +402,11 @@ update_tool() {
             return 0
         fi
         "$tool" update --no-restart-plasma ${yes:+--yes} || return 1
-        echo "Log out and log in again, or restart Plasma, to load the updated plasmoids."
+        if [ "$RESTART_PLASMA" = on ]; then
+            PLASMA_RESTART_NEEDED=yes
+        else
+            echo "Log out and log in again, or restart Plasma, to load the updated plasmoids."
+        fi
         ;;
     esac
 }
@@ -399,7 +420,52 @@ mark_updated() {
     date +%s > "$STATE_DIR/last-update"
 }
 
+# Set when the run updated plasmoids and the configuration asks for a
+# restart of Plasma. The restart comes at the end of the run, see below.
+PLASMA_RESTART_NEEDED=
+
+# The update window of the widget restarts Plasma after the user closes
+# it. This file tells the window that the run asks for the restart.
+RESTART_PENDING="$STATE_DIR/restart-plasma"
+
+# Restart plasmashell. Each process that the widget starts, this run too,
+# is part of the systemd unit of plasmashell, and a restart of that unit
+# stops all of them. systemd-run starts the restart in a unit of its own,
+# so the restart does not stop itself.
+restart_plasma() {
+    if command -v systemd-run >/dev/null 2>&1 \
+        && systemctl --user is-active --quiet plasma-plasmashell.service; then
+        systemd-run --user --no-block --quiet --collect \
+            systemctl --user restart plasma-plasmashell.service
+    else
+        warn "cannot restart Plasma: the systemd unit plasma-plasmashell.service is not active; log out and log in again to load the updated plasmoids"
+        return 1
+    fi
+}
+
+# The end of a run: restart Plasma now, or leave a note for the update
+# window to do it when the user closes the window.
+finish_restart() {
+    [ -n "$PLASMA_RESTART_NEEDED" ] || return 0
+    if [ -n "${BS_UPDATE_IN_WINDOW:-}" ]; then
+        mkdir -p "$STATE_DIR"
+        : > "$RESTART_PENDING"
+        echo "Plasma restarts when you close this window, to load the updated plasmoids."
+    else
+        echo "Restarting Plasma to load the updated plasmoids."
+        restart_plasma
+    fi
+}
+
+do_restart_if_pending() {
+    [ -e "$RESTART_PENDING" ] || return 0
+    rm -f "$RESTART_PENDING"
+    restart_plasma
+}
+
 do_update() {
+    # A note left by an earlier window that did not close normally.
+    rm -f "$RESTART_PENDING"
     if [ -z "$ENABLED" ]; then
         warn "no update tools are enabled; nothing to update"
         return 1
@@ -434,7 +500,7 @@ open_in_terminal() {
     term=$(kreadconfig6 --file kdeglobals --group General --key TerminalApplication 2>/dev/null)
     [ -n "$term" ] || term="${TERMINAL:-}"
     [ -n "$term" ] || term=konsole
-    $term -e sh -c "'$SELF'$tools_arg$interaction_arg; printf '\nFinished. Press Enter to close.'; read line"
+    $term -e sh -c "BS_UPDATE_IN_WINDOW=1 '$SELF'$tools_arg$interaction_arg; printf '\nFinished. Press Enter to close.'; read line; '$SELF' --restart-plasma-if-pending"
 }
 
 # Install the updates without a terminal, and report the result in a
@@ -455,6 +521,11 @@ do_silent() {
         notify-send -a "bs-updater" -i dialog-error -t 0 \
             "The update failed" "Read $log, or run bs-update in a terminal." \
             >/dev/null 2>&1 &
+    fi
+    # Give the notification time to reach the screen before Plasma stops.
+    if [ -n "$PLASMA_RESTART_NEEDED" ]; then
+        sleep 2
+        finish_restart >> "$log" 2>&1
     fi
 }
 
@@ -583,6 +654,7 @@ while [ $# -gt 0 ]; do
     --list-tools)  mode=list-tools ;;
     --in-terminal) mode=terminal ;;
     --start)       mode=start ;;
+    --restart-plasma-if-pending) mode=restart-pending ;;
     --notify|--notify-always|--notify-uptodate) notify=$1 ;;
     --tools)
         shift
@@ -627,6 +699,11 @@ confirm|auto|silent) ;;
     ;;
 esac
 INTERACTION=$interaction
+
+RESTART_PLASMA=off
+if [ -r "$CONFIG_FILE" ]; then
+    RESTART_PLASMA=$(read_config_restart)
+fi
 # Pass the level on to the run started from the terminal or the
 # notification, so every run of one click behaves the same way.
 interaction_arg=" --interaction $INTERACTION"
@@ -634,9 +711,15 @@ interaction_arg=" --interaction $INTERACTION"
 ENABLED=$(resolve_tools "$(printf '%s' "$tools" | tr ',' ' ')")
 
 case "$mode" in
-update)     do_update ;;
+update)
+    do_update
+    rc=$?
+    finish_restart
+    exit "$rc"
+    ;;
 list)       do_list "$notify" ;;
 list-tools) do_list_tools ;;
 terminal)   open_in_terminal ;;
 start)      do_start ;;
+restart-pending) do_restart_if_pending ;;
 esac

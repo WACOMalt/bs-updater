@@ -6,11 +6,11 @@
 ./tests/run-tests.sh
 ```
 
-The suite tests the command `bs-update`. Version 1.13.1 has 102 tests. The
+The suite tests the command `bs-update`. Version 1.13.2 has 107 tests. The
 suite writes one line for each test and a summary at the end:
 
 ```
-102 passed, 0 failed
+107 passed, 0 failed
 ```
 
 The exit code is 0 if each test passes. The exit code is 1 if one test or

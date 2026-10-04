@@ -106,6 +106,14 @@ The parser is one `awk` program with these three conditions. It gives the
 correct count with DNF 4 and with DNF 5, and it does not use root
 privileges.
 
+For the tool `nobara-sync`, the parser has a fourth condition. It does not
+count a build for an older Fedora release than the system. A Nobara
+repository can hold an `fc43` build with a higher release number than the
+installed `fc44` build. DNF shows that build as an update, but
+`nobara-sync` excludes older repository builds and does not install it.
+The command `rpm -E %fedora` gives the release of the system. If that
+value is not a number, the parser counts each update.
+
 ## 8.6 The count of the Debian updates
 
 ```

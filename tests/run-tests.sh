@@ -74,6 +74,13 @@ REPORT
         echo "package-$i.x86_64  1.0-$i.fc40  updates"
         i=$((i + 1))
     done
+    # Builds for an older Fedora release, with a higher release number
+    # than the installed build, as a Nobara repository can hold them.
+    i=1
+    while [ "$i" -le "${STUB_RPM_OLD_COUNT:-0}" ]; do
+        echo "older-$i.x86_64  1.0-$((i + 1)).fc39  nobara"
+        i=$((i + 1))
+    done
     ;;
 esac
 exit "${STUB_DNF_RC:-0}"
@@ -169,6 +176,12 @@ EOF
 cat > "$STUB_BIN/konsole" <<'EOF'
 #!/bin/sh
 echo "konsole $*" >> "$STUB_LOG"
+EOF
+
+# rpm gives the Fedora release of the system, which the stubs call 40.
+cat > "$STUB_BIN/rpm" <<'EOF'
+#!/bin/sh
+case "$*" in "-E %fedora") echo "${STUB_FEDORA:-40}" ;; esac
 EOF
 
 chmod 755 "$STUB_BIN"/*
@@ -421,15 +434,23 @@ run --tools plasmoid-updater -l
 check "no plasmoid update counts zero" "Plasmoids: 0
 Total: 0" "$out"
 
-run --tools plasmoid-updater
+STUB_PLASMOID_COUNT=2 run --tools plasmoid-updater
 check "plasmoid-updater asks at the confirm level and leaves Plasma running" \
-    "plasmoid-updater update --no-restart-plasma" "$(cat "$WORK/log")"
+    "plasmoid-updater check
+plasmoid-updater update --no-restart-plasma" "$(cat "$WORK/log")"
 contains "the run says how to load the new plasmoids" \
     "restart Plasma" "$out"
 
-run --tools plasmoid-updater --interaction auto
+STUB_PLASMOID_COUNT=2 run --tools plasmoid-updater --interaction auto
 check "auto adds --yes" \
-    "plasmoid-updater update --no-restart-plasma --yes" "$(cat "$WORK/log")"
+    "plasmoid-updater check
+plasmoid-updater update --no-restart-plasma --yes" "$(cat "$WORK/log")"
+
+run --tools plasmoid-updater
+check "with no plasmoid update, nothing is installed" \
+    "plasmoid-updater check" "$(cat "$WORK/log")"
+lacks "and the run does not ask for a restart of Plasma" \
+    "restart Plasma" "$out"
 
 # The real program can be installed on the test machine as well.
 if ! PATH=$PATH_WITHOUT_PLASMOID command -v plasmoid-updater >/dev/null 2>&1; then
@@ -478,6 +499,21 @@ run --tools nobara-sync -l
 check "nobara-sync counts its RPM updates with dnf" \
     "RPM: 5
 Total: 5" "$out"
+
+STUB_RPM_OLD_COUNT=3 run --tools nobara-sync -l
+check "nobara-sync does not count builds for an older Fedora release" \
+    "RPM: 5
+Total: 5" "$out"
+
+STUB_RPM_OLD_COUNT=3 run --tools dnf -l
+check "dnf counts them, because dnf upgrade installs them" \
+    "RPM: 8
+Total: 8" "$out"
+
+STUB_RPM_OLD_COUNT=3 STUB_FEDORA=unknown run --tools nobara-sync -l
+check "without a known Fedora release, nobara-sync counts each update" \
+    "RPM: 8
+Total: 8" "$out"
 
 run --tools nobara-sync
 check "nobara-sync runs its own cli mode and raises its own privileges" \

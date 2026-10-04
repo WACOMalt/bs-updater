@@ -207,10 +207,25 @@ resolve_tools() {
 # first column count. The trailing "Obsoleting Packages" section repeats
 # packages that are already listed above, so counting stops there. Works
 # with both dnf 4 and dnf 5, and needs no root.
+#
+# With the argument "nobara", builds for an older Fedora release than the
+# system's are not counted. A Nobara repository can hold an fc43 build
+# with a higher release number than the installed fc44 build. dnf calls
+# that an upgrade, but nobara-sync excludes older repository builds, so
+# it never installs it.
 count_rpm() {
-    dnf -q check-update 2>/dev/null | awk '
+    release=
+    if [ "$1" = nobara ]; then
+        release=$(rpm -E %fedora 2>/dev/null)
+        case "$release" in ''|*[!0-9]*) release= ;; esac
+    fi
+    dnf -q check-update 2>/dev/null | awk -v release="$release" '
         /^Obsoleting Packages/ { exit }
-        /^[^[:space:]]/ && $1 ~ /\./ { n++ }
+        /^[^[:space:]]/ && $1 ~ /\./ {
+            if (release != "" && match($2, /\.fc[0-9]+/) \
+                && substr($2, RSTART + 3, RLENGTH - 3) + 0 < release + 0) next
+            n++
+        }
         END { print n + 0 }'
 }
 
@@ -269,7 +284,8 @@ count_tool() {
     # nobara-sync installs its system updates with dnf, so dnf counts them.
     # Its own check-updates command would ask for the root password, which
     # a scheduled check from the tray widget cannot answer.
-    dnf|nobara-sync)  count_rpm ;;
+    dnf)              count_rpm ;;
+    nobara-sync)      count_rpm nobara ;;
     apt)              count_deb ;;
     # nobara-sync updates Flatpak applications with flatpak underneath,
     # so the same command counts them.
@@ -361,6 +377,12 @@ update_tool() {
         if ! tool=$(find_plasmoid_updater); then
             warn "$PLASMOID_UPDATER_MISSING"
             return 1
+        fi
+        # Check first, so the run says "restart Plasma" only when it
+        # updated something.
+        if [ "$(count_plasmoids)" -eq 0 ]; then
+            echo "plasmoid-updater: no updates available"
+            return 0
         fi
         "$tool" update --no-restart-plasma ${yes:+--yes} || return 1
         echo "Log out and log in again, or restart Plasma, to load the updated plasmoids."

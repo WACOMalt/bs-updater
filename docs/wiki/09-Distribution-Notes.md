@@ -36,7 +36,7 @@ Select `dnf` and clear the Arch tools.
 
 | Function | Command |
 | --- | --- |
-| The count | `dnf -q check-update` |
+| The count | `dnf -q --cacheonly check-update` |
 | The installation | `sudo dnf upgrade` |
 
 The count command does not use root privileges. DNF 4 and DNF 5 both give the
@@ -49,7 +49,7 @@ Select `nobara-sync` and clear the Arch tools. Also clear `dnf`, because
 
 | Function | Command |
 | --- | --- |
-| The count | `dnf -q check-update` |
+| The count | `dnf -q --cacheonly check-update` |
 | The installation | `nobara-sync cli` |
 
 Three properties are specific to Nobara:

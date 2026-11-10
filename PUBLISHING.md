@@ -25,7 +25,9 @@ Copy this text into the store description field:
 > first start. You can set the check interval, choose which notifications to
 > show, check or uncheck each update source, and choose whether an update run
 > asks before it installs, installs without a question, or runs in the
-> background with a notification at the end. The settings warn you when
+> background with a notification at the end. If a check or an update cannot
+> continue without you, a notification names the problem and opens a terminal
+> to fix it. The settings warn you when
 > two of the selected tools update the same kind of package. With the tray
 > entry set to "Shown when relevant", the icon hides while the system is up
 > to date. Requirements: Arch Linux, pacman-contrib, a terminal application,

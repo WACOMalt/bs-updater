@@ -52,6 +52,13 @@ EOF
 cat > "$STUB_BIN/dnf" <<'EOF'
 #!/bin/sh
 echo "dnf $*" >> "$STUB_LOG"
+# What the input of dnf is: a question waits on it.
+[ "${STUB_REPORT_STDIN:-0}" -eq 1 ] && \
+    echo "dnf-stdin $(readlink /proc/$$/fd/0)" >> "$STUB_LOG"
+# The question dnf asks about a repository key it does not have.
+[ "${STUB_DNF_KEY:-0}" -eq 1 ] && \
+    printf 'Importing OpenPGP key 0xDE226D6F:\nIs this ok [y/N]: ' >&2
+[ -n "${STUB_DNF_SLEEP:-}" ] && sleep "$STUB_DNF_SLEEP"
 case "$*" in
 *check-update*)
     if [ "${STUB_DNF_TRICKY:-0}" -eq 1 ]; then
@@ -89,6 +96,12 @@ EOF
 cat > "$STUB_BIN/nobara-sync" <<'EOF'
 #!/bin/sh
 echo "nobara-sync $*" >> "$STUB_LOG"
+[ "${STUB_REPORT_STDIN:-0}" -eq 1 ] && \
+    echo "nobara-sync-stdin $(readlink /proc/$$/fd/0)" >> "$STUB_LOG"
+if [ "${STUB_NOBARA_KEY:-0}" -eq 1 ]; then
+    printf 'Importing OpenPGP key 0xDE226D6F:\nIs this ok [y/N]: '
+    exit 1
+fi
 EOF
 
 # "apt-get -s upgrade" simulates the upgrade and prints one "Inst" line per
@@ -136,6 +149,8 @@ EOF
 cat > "$STUB_BIN/sudo" <<'EOF'
 #!/bin/sh
 echo "sudo $*" >> "$STUB_LOG"
+# A silent run gives sudo "-A", for the window that asks for the password.
+[ "$1" = "-A" ] && shift
 "$@" >/dev/null 2>&1
 EOF
 
@@ -531,8 +546,8 @@ run --tools dnf -l
 check "dnf counts the RPM packages with an update" \
     "RPM: 5
 Total: 5" "$out"
-check "counting RPM updates does not need root" \
-    "dnf -q check-update" "$(cat "$WORK/log")"
+check "counting RPM updates does not need root, and reads the system cache" \
+    "dnf -q --cacheonly check-update" "$(cat "$WORK/log")"
 
 run --tools dnf
 check "dnf installs the RPM updates" \
@@ -894,6 +909,72 @@ for key in $(grep -o 'cfg_[A-Za-z]*:' "$PLASMOID_DIR"/ui/config*.qml \
         || missing_keys="$missing_keys $key"
 done
 check "each setting on a settings page is in main.xml" "" "$missing_keys"
+
+echo
+echo "# A question or a fault that a check cannot solve"
+clear_config
+printf 'y\n' > "$WORK/answers"
+
+STUB_REPORT_STDIN=1
+export STUB_REPORT_STDIN
+run --tools dnf -l < "$WORK/answers"
+contains "a check gives dnf no input, so a question cannot wait for hours" \
+    "dnf-stdin /dev/null" "$(cat "$WORK/log")"
+
+run --tools nobara-sync --interaction silent --start < "$WORK/answers"
+contains "a background run gives its tools no input as well" \
+    "nobara-sync-stdin /dev/null" "$(cat "$WORK/log")"
+unset STUB_REPORT_STDIN
+
+STUB_DNF_KEY=1
+export STUB_DNF_KEY
+run --tools dnf -l
+contains "a key question is reported, with the command that fixes it" \
+    "RPM packages: a repository asks you to accept its signing key. To fix it, run: sudo dnf makecache" \
+    "$err"
+run --tools dnf -l --notify
+contains "the problem also comes as a notification" \
+    "Updates need your attention" "$(sleep 1; cat "$WORK/log")"
+contains "the notification gives the command that fixes it" \
+    "or run: sudo dnf makecache" "$(cat "$WORK/log")"
+run --tools dnf -l
+lacks "without --notify, the problem does not come as a notification" \
+    "Updates need your attention" "$(sleep 1; cat "$WORK/log")"
+unset STUB_DNF_KEY
+
+STUB_DNF_RC=1
+export STUB_DNF_RC
+run --tools dnf -l
+contains "a dnf error is reported, with the command that fixes it" \
+    "dnf could not read the system package cache. To fix it, run: sudo dnf makecache" \
+    "$err"
+# One repository can fail while the others report their updates, so the
+# count keeps what dnf reported.
+check "a dnf error keeps the count that dnf reported" "RPM: 5
+Total: 5" "$out"
+unset STUB_DNF_RC
+
+BS_UPDATE_CHECK_TIMEOUT=1
+STUB_DNF_SLEEP=5
+export BS_UPDATE_CHECK_TIMEOUT STUB_DNF_SLEEP
+start=$(date +%s)
+run --tools dnf -l
+elapsed=$(( $(date +%s) - start ))
+contains "a check that runs too long is stopped and reported" \
+    "the check did not finish in 1 seconds" "$err"
+check "the time limit stops it at once" "yes" \
+    "$([ "$elapsed" -lt 4 ] && echo yes || echo "no, $elapsed seconds")"
+unset BS_UPDATE_CHECK_TIMEOUT STUB_DNF_SLEEP
+
+STUB_NOBARA_KEY=1
+export STUB_NOBARA_KEY
+run --tools nobara-sync --interaction silent --start
+contains "a background run that stops at a key question says why" \
+    "accept its signing key, and a background run cannot answer" \
+    "$(sleep 1; cat "$WORK/log")"
+contains "and offers the update in a terminal, where the user can answer" \
+    "Click to run the update in a terminal" "$(cat "$WORK/log")"
+unset STUB_NOBARA_KEY
 
 echo
 echo "# Help"

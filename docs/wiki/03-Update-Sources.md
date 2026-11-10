@@ -85,15 +85,23 @@ Each count command runs without root privileges.
 | --- | --- | --- |
 | `pacman`, `paru-repo` | `checkupdates` | Counts the output lines. |
 | `paru-aur` | `paru -Qua` | Counts the output lines. |
-| `dnf`, `nobara-sync` | `dnf -q check-update` | Counts the package lines. |
+| `dnf`, `nobara-sync` | `dnf -q --cacheonly check-update` | Counts the package lines. |
 | `apt` | `apt-get -q -s upgrade` | Counts the `Inst` lines. |
 | `flatpak` | `flatpak remote-ls --updates` | Counts the output lines. |
 | `gearlever` | `gearlever --list-updates` | Counts the output lines. |
 
-The command ignores the exit code of each count command. `dnf check-update`
-gives the exit code 100 when updates are available, and `checkupdates` gives
-a non-zero exit code when no updates are available. A count of zero is the
-correct result in each of these conditions.
+The command ignores the exit code of each count command, but not of DNF.
+`checkupdates` gives a non-zero exit code when no updates are available. A
+count of zero is the correct result in that condition.
+
+`dnf check-update` gives the exit code 100 when updates are available, and 0
+when none are available. Any other exit code is a fault. The command then
+keeps the count that DNF reported, and reports the fault. Section 12.14
+describes the report.
+
+Each count command gets no input and a time limit of 300 seconds. A question
+thus gets the answer "no" at once, and a fault in the network cannot keep a
+count command in operation.
 
 ## 3.7 The update command of each tool
 

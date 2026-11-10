@@ -218,12 +218,36 @@ resolve_tools() {
     printf '%s' "${resolved# }"
 }
 
+# A check runs in the background, so nobody can answer a question it asks.
+# Each count command gets no input, so a question gets "no" at once, and a
+# time limit, so a fault in a network or a tool cannot keep it running.
+CHECK_TIMEOUT=${BS_UPDATE_CHECK_TIMEOUT:-300}
+ATTENTION=
+
+limited() {
+    timeout "$CHECK_TIMEOUT" "$@"
+}
+
+# needs_attention <source> <problem> <command that fixes it>: record a
+# problem that a check cannot solve without the user. do_list tells the
+# user about each one. $ATTENTION is the file that holds them.
+needs_attention() {
+    [ -n "$ATTENTION" ] || return 0
+    printf '%s|%s|%s\n' "$1" "$2" "$3" >> "$ATTENTION"
+}
+
 # The number of RPM packages with an update available. dnf reports them on
 # stdout, one package per line, as "name.arch version repository". Long
 # names wrap onto a second, indented line, so only lines that start in the
 # first column count. The trailing "Obsoleting Packages" section repeats
 # packages that are already listed above, so counting stops there. Works
 # with both dnf 4 and dnf 5, and needs no root.
+#
+# The count reads the system cache with --cacheonly. Root fills that cache
+# with the repository signing keys root accepted, and dnf-makecache.timer
+# refreshes it. The user cache has none of those keys, so a check from it
+# asks about each key again. A question with no one to answer it kept dnf
+# running for hours, and dnf kept its lock, so no other dnf could run.
 #
 # With the argument "nobara", builds for an older Fedora release than the
 # system's are not counted. A Nobara repository can hold an fc43 build
@@ -236,14 +260,38 @@ count_rpm() {
         release=$(rpm -E %fedora 2>/dev/null)
         case "$release" in ''|*[!0-9]*) release= ;; esac
     fi
-    dnf -q check-update 2>/dev/null | awk -v release="$release" '
+    report=$(mktemp)
+    problems=$(mktemp)
+    limited dnf -q --cacheonly check-update > "$report" 2> "$problems"
+    rc=$?
+    # check-update exits with 100 when updates are available.
+    case "$rc" in
+    0|100) ;;
+    124)
+        needs_attention "RPM packages" \
+            "the check did not finish in $CHECK_TIMEOUT seconds" \
+            "sudo dnf makecache"
+        ;;
+    *)
+        needs_attention "RPM packages" \
+            "dnf could not read the system package cache" \
+            "sudo dnf makecache"
+        ;;
+    esac
+    if grep -q "Importing OpenPGP key" "$problems"; then
+        needs_attention "RPM packages" \
+            "a repository asks you to accept its signing key" \
+            "sudo dnf makecache"
+    fi
+    awk -v release="$release" '
         /^Obsoleting Packages/ { exit }
         /^[^[:space:]]/ && $1 ~ /\./ {
             if (release != "" && match($2, /\.fc[0-9]+/) \
                 && substr($2, RSTART + 3, RLENGTH - 3) + 0 < release + 0) next
             n++
         }
-        END { print n + 0 }'
+        END { print n + 0 }' "$report"
+    rm -f "$report" "$problems"
 }
 
 # The number of Debian packages with an update available. "apt-get -s
@@ -257,7 +305,7 @@ count_rpm() {
 # refresh those in the background with the apt-daily timer, so a system
 # with that timer running counts what its last refresh found.
 count_deb() {
-    apt-get -q -s upgrade 2>/dev/null | awk '
+    limited apt-get -q -s upgrade 2>/dev/null | awk '
         /^Inst / { n++ }
         END { print n + 0 }'
 }
@@ -288,7 +336,7 @@ count_plasmoids() {
         return
     fi
     esc=$(printf '\033')
-    "$tool" check 2>/dev/null | sed "s/$esc\[[0-9;]*m//g" | awk '
+    limited "$tool" check 2>/dev/null | sed "s/$esc\[[0-9;]*m//g" | awk '
         $2 ~ /^updates?$/ && $3 == "available." { n = $1 }
         END { print n + 0 }'
 }
@@ -296,8 +344,8 @@ count_plasmoids() {
 # The number of updates one tool has available.
 count_tool() {
     case "$1" in
-    pacman|paru-repo) checkupdates 2>/dev/null | grep -c . ;;
-    paru-aur)         paru -Qua 2>/dev/null | grep -c . ;;
+    pacman|paru-repo) limited checkupdates 2>/dev/null | grep -c . ;;
+    paru-aur)         limited paru -Qua 2>/dev/null | grep -c . ;;
     # nobara-sync installs its system updates with dnf, so dnf counts them.
     # Its own check-updates command would ask for the root password, which
     # a scheduled check from the tray widget cannot answer.
@@ -307,10 +355,10 @@ count_tool() {
     # nobara-sync updates Flatpak applications with flatpak underneath,
     # so the same command counts them.
     flatpak|nobara-sync-flatpak)
-                      flatpak remote-ls --updates 2>/dev/null | grep -c . ;;
+                      limited flatpak remote-ls --updates 2>/dev/null | grep -c . ;;
     # --all checks each integrated AppImage and downloads only those with
     # a newer version available. --yes skips the interactive question.
-    gearlever)        $GEARLEVER --list-updates 2>/dev/null \
+    gearlever)        limited $GEARLEVER --list-updates 2>/dev/null \
                       | grep -v '^No updates available' | grep -c . ;;
     plasmoid-updater) count_plasmoids ;;
     esac
@@ -496,17 +544,61 @@ do_update() {
 # Open the user's terminal application and run bs-update inside it.
 # Order: the KDE default terminal, then $TERMINAL, then konsole.
 # Returns when the terminal window closes.
-open_in_terminal() {
+terminal_program() {
     term=$(kreadconfig6 --file kdeglobals --group General --key TerminalApplication 2>/dev/null)
     [ -n "$term" ] || term="${TERMINAL:-}"
     [ -n "$term" ] || term=konsole
-    $term -e sh -c "BS_UPDATE_IN_WINDOW=1 '$SELF'$tools_arg$interaction_arg; printf '\nFinished. Press Enter to close.'; read line; '$SELF' --restart-plasma-if-pending"
+    printf '%s' "$term"
+}
+
+open_in_terminal() {
+    $(terminal_program) -e sh -c "BS_UPDATE_IN_WINDOW=1 '$SELF'$tools_arg$interaction_arg; printf '\nFinished. Press Enter to close.'; read line; '$SELF' --restart-plasma-if-pending"
+}
+
+# Run the commands that fix a problem in a terminal, where the user can
+# answer their questions.
+run_fix_in_terminal() {
+    $(terminal_program) -e sh -c "printf '%s\\n\\n' 'bs-updater runs: $1'; $1; printf '\\nFinished. Press Enter to close.'; read line"
+}
+
+# Tell the user about each problem that a check cannot solve. A click on
+# the notification runs the fix in a terminal. While one notification
+# waits for a click, a new check does not add a second one.
+ATTENTION_PID="$STATE_DIR/attention.pid"
+
+show_attention() {
+    mkdir -p "$STATE_DIR"
+    pid=$(cat "$ATTENTION_PID" 2>/dev/null)
+    if [ -n "$pid" ] && [ "$(ps -o comm= -p "$pid" 2>/dev/null)" = notify-send ]; then
+        return 0
+    fi
+    body=$(awk -F'|' '!seen[$1 FS $2]++ { print $1 ": " $2 "." }' "$ATTENTION")
+    fixes=$(cut -d'|' -f3 "$ATTENTION" | awk '!seen[$0]++' | paste -sd ';' -)
+    (
+        notify-send -a "bs-updater" -i dialog-warning -t 0 \
+            -A default="Fix it" \
+            "Updates need your attention" \
+            "$body
+Click to fix it in a terminal, or run: $fixes" \
+            > "$STATE_DIR/attention.choice" &
+        echo "$!" > "$ATTENTION_PID"
+        wait "$!" || exit 0
+        choice=$(cat "$STATE_DIR/attention.choice" 2>/dev/null)
+        rm -f "$ATTENTION_PID" "$STATE_DIR/attention.choice"
+        if [ -n "$choice" ]; then
+            run_fix_in_terminal "$fixes"
+        fi
+    ) >/dev/null 2>&1 &
 }
 
 # Install the updates without a terminal, and report the result in a
 # notification. The output goes to a file, so a failed run can be read
 # afterwards.
 do_silent() {
+    # Nobody can answer a question in a background run. With no input, a
+    # tool that asks gets "no" at once and stops, instead of waiting for
+    # hours with its package lock held.
+    exec < /dev/null
     mkdir -p "$STATE_DIR"
     log="$STATE_DIR/last-run.log"
     if ! use_graphical_password; then
@@ -518,9 +610,19 @@ do_silent() {
         notify-send -a "bs-updater" -i update-none -t 5000 \
             "Updates installed" "The system is up to date." >/dev/null 2>&1 &
     else
-        notify-send -a "bs-updater" -i dialog-error -t 0 \
-            "The update failed" "Read $log, or run bs-update in a terminal." \
-            >/dev/null 2>&1 &
+        reason="Read $log for the cause."
+        if grep -q "Importing OpenPGP key" "$log"; then
+            reason="A repository asks you to accept its signing key, and a background run cannot answer."
+        fi
+        (
+            choice=$(notify-send -a "bs-updater" -i dialog-error -t 0 \
+                -A default="Update in a terminal" \
+                "The update did not finish" \
+                "$reason Click to run the update in a terminal, where you can answer its questions.")
+            if [ -n "$choice" ]; then
+                open_in_terminal
+            fi
+        ) >/dev/null 2>&1 &
     fi
     # Give the notification time to reach the screen before Plasma stops.
     if [ -n "$PLASMA_RESTART_NEEDED" ]; then
@@ -606,6 +708,7 @@ show_notification() {
 do_list() {
     total=0
     summary=
+    ATTENTION=$(mktemp)
     for id in $ENABLED; do
         heading=$(domain_heading "$(tool_domain "$id")")
         count=$(count_tool "$id")
@@ -618,11 +721,20 @@ do_list() {
     printf 'Total: %s\n' "$total"
     [ -n "$ENABLED" ] || warn "no update tools are enabled; nothing was checked"
 
+    if [ -s "$ATTENTION" ]; then
+        while IFS='|' read -r what problem fix; do
+            warn "$what: $problem. To fix it, run: $fix"
+        done < "$ATTENTION"
+    fi
+
     case "$1" in
     --notify|--notify-always|--notify-uptodate)
         show_notification "$1"
+        [ -s "$ATTENTION" ] && show_attention
         ;;
     esac
+    # show_attention reads the file before it returns.
+    rm -f "$ATTENTION"
 }
 
 # Show every supported tool so the choice in the widget can be checked
@@ -717,7 +829,8 @@ update)
     finish_restart
     exit "$rc"
     ;;
-list)       do_list "$notify" ;;
+# A check runs in the background, so it gets no input: see limited.
+list)       exec < /dev/null; do_list "$notify" ;;
 list-tools) do_list_tools ;;
 terminal)   open_in_terminal ;;
 start)      do_start ;;

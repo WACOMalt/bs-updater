@@ -45,14 +45,30 @@ them.
 ## Fedora and Nobara
 
 On Fedora, check `dnf` under "Update sources" and uncheck the Arch sources.
-`bs-update` counts the available updates with `dnf check-update`, which needs
-no root, and installs them with `sudo dnf upgrade`.
+`bs-update` counts the available updates with `dnf --cacheonly check-update`,
+which needs no root, and installs them with `sudo dnf upgrade`.
+
+The count reads the system cache. Root fills that cache, with the repository
+signing keys that root accepted, and `dnf-makecache.timer` refreshes it. Thus
+the count asks no questions and uses no network. The count is as recent as
+the last run of that timer. The update run refreshes the cache itself.
 
 On Nobara, check `nobara-sync` instead. `nobara-sync cli` installs the system
 updates together with the Nobara fixups, and asks for the root password
 itself, so bs-updater does not run it through `sudo`. It counts its updates
-with `dnf check-update`, because `nobara-sync check-updates` would ask for the
-root password on every scheduled check.
+with `dnf --cacheonly check-update`, because `nobara-sync check-updates` would
+ask for the root password on every scheduled check.
+
+A check or a background run gets no input, because nobody can answer a
+question there. A tool that asks a question gets "no" at once. In version
+1.13.3 and earlier, a dnf question in a check waited for hours, and dnf kept
+its lock for all that time. No other dnf command could run.
+
+If a check or a background run cannot continue without you, a notification
+"Updates need your attention" names the problem and the command that fixes
+it. Click the notification to run that command in a terminal. For example, a
+repository can ask you to accept a new signing key: run `sudo dnf makecache`,
+and answer the question.
 
 nobara-sync updates Flatpak applications as well, with its `--all` option, so
 it is listed a second time under Flatpak applications. Choose one of these two

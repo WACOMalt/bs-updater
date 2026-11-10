@@ -89,8 +89,13 @@ tool covers. It reports each removal on the error output.
 ## 8.5 The count of the RPM updates
 
 ```
-dnf -q check-update
+dnf -q --cacheonly check-update
 ```
+
+The option `--cacheonly` makes DNF read the system cache. Root fills that
+cache, and the timer `dnf-makecache` refreshes it. The cache of the user has
+no repository signing keys. A count from that cache asks about each key, and
+a scheduled check has no person to answer.
 
 DNF writes one package for each line, in the form
 `name.arch version repository`. The parser must obey three conditions:

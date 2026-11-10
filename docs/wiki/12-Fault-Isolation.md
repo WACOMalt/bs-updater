@@ -148,7 +148,34 @@ head -1 ~/.local/bin/bs-update
 The first line must be `#!/bin/sh`. Then restart Plasma to install the
 current copy from the widget.
 
-## 12.13 How to collect data for a report
+## 12.13 DNF stays locked for hours
+
+**Cause:** Version 1.13.3 and earlier gave DNF an open input during a
+scheduled check. When a repository had a signing key that the user cache did
+not have, DNF asked a question. Nobody answered, and DNF kept its lock until
+the next restart. No other DNF command could run in that time.
+
+**Corrective action:**
+
+1. Install version 1.14.0 or later.
+2. Stop the old check:
+
+   ```
+   pkill -u "$USER" -f "dnf -q check-update"
+   ```
+
+## 12.14 A notification says "Updates need your attention"
+
+**Cause:** A check or a background run found a fault that it cannot correct
+without you. The notification names the fault and the command that corrects
+it.
+
+**Corrective action:** Click the notification. A terminal opens and runs the
+command, so that you can answer its questions. For a repository signing key,
+the command is `sudo dnf makecache`. Make sure that you trust the repository
+before you accept its key.
+
+## 12.15 How to collect data for a report
 
 Give this data with a problem report:
 
